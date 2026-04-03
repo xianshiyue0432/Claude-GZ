@@ -17,6 +17,7 @@ A **locally runnable version** repaired from the leaked Claude Code source, with
 - [Quick Start](#quick-start)
 - [Environment Variables](#environment-variables)
 - [Fallback Mode](#fallback-mode)
+- [Computer Use Desktop Control](#computer-use-desktop-control)
 - [FAQ](#faq)
 - [Fixes Compared with the Original Leaked Source](#fixes-compared-with-the-original-leaked-source)
 - [Project Structure](#project-structure)
@@ -30,7 +31,10 @@ A **locally runnable version** repaired from the leaked Claude Code source, with
 - `--print` headless mode for scripts and CI
 - MCP server, plugin, and Skills support
 - Custom API endpoint and model support ([Third-Party Models Guide](docs/third-party-models.en.md))
+- **Computer Use desktop control** (screenshots, mouse, keyboard, app management) — [Guide](docs/computer-use.en.md)
 - Fallback Recovery CLI mode
+
+> **Computer Use Note**: This project includes a **modified version of Computer Use**. The official implementation relies on Anthropic's private native modules. We replaced the entire underlying operation layer with a Python bridge (`pyautogui` + `mss` + `pyobjc`), enabling anyone to use Computer Use on macOS. See the [Computer Use Guide](docs/computer-use.en.md) for details.
 
 ---
 
@@ -211,6 +215,23 @@ If the full TUI has issues, use the simplified readline-based interaction mode:
 ```bash
 CLAUDE_CODE_FORCE_RECOVERY_CLI=1 ./bin/claude-haha
 ```
+
+---
+
+## Computer Use Desktop Control
+
+This project enables and modifies Claude Code's Computer Use feature (internal codename "Chicago"), allowing AI models to directly control your macOS desktop — screenshots, mouse clicks, keyboard input, app management.
+
+**Underlying modification**: The official implementation depends on Anthropic's private native modules (`@ant/computer-use-swift`, `@ant/computer-use-input`). This project replaces them entirely with a Python bridge using `pyautogui` (mouse/keyboard), `mss` (screenshots), and `pyobjc` (macOS APIs) — no closed-source binaries required.
+
+```bash
+# Ensure Python 3 and macOS Accessibility/Screen Recording permissions, then:
+./bin/claude-haha
+> Take a screenshot
+> Open Safari and search for something
+```
+
+For supported platforms, technical architecture, and approaches we tried, see: **[Computer Use Guide](docs/computer-use.en.md)**
 
 ---
 

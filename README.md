@@ -17,6 +17,7 @@
 - [快速开始](#快速开始)
 - [环境变量说明](#环境变量说明)
 - [降级模式](#降级模式)
+- [Computer Use 桌面控制](#computer-use-桌面控制)
 - [常见问题](#常见问题)
 - [相对于原始泄露源码的修复](#相对于原始泄露源码的修复)
 - [项目结构](#项目结构)
@@ -30,7 +31,10 @@
 - `--print` 无头模式（脚本/CI 场景）
 - 支持 MCP 服务器、插件、Skills
 - 支持自定义 API 端点和模型（[第三方模型使用指南](docs/third-party-models.md)）
+- **Computer Use 桌面控制**（截屏、鼠标、键盘、应用管理）— [使用指南](docs/computer-use.md)
 - 降级 Recovery CLI 模式
+
+> **Computer Use 说明**：本项目包含**魔改版的 Computer Use** 功能。官方实现依赖 Anthropic 私有原生模块，我们替换了整个底层操作层，使用 Python bridge（`pyautogui` + `mss` + `pyobjc`）实现，使得任何人都可以在 macOS 上使用。详见 [Computer Use 功能指南](docs/computer-use.md)。
 
 ---
 
@@ -211,6 +215,23 @@ bun --env-file=.env ./src/localRecoveryCli.ts
 ```bash
 CLAUDE_CODE_FORCE_RECOVERY_CLI=1 ./bin/claude-haha
 ```
+
+---
+
+## Computer Use 桌面控制
+
+本项目启用并改造了 Claude Code 的 Computer Use 功能（内部代号 "Chicago"），让 AI 模型可以直接控制你的 macOS 桌面——截屏、鼠标点击、键盘输入、应用管理。
+
+**底层改造**：官方实现依赖 Anthropic 私有原生模块（`@ant/computer-use-swift`、`@ant/computer-use-input`），本项目用 Python bridge 完全替代，使用 `pyautogui`（鼠标键盘）、`mss`（截图）、`pyobjc`（macOS API），无需任何闭源二进制。
+
+```bash
+# 确保有 Python 3 和 macOS 辅助功能/屏幕录制权限，然后直接使用：
+./bin/claude-haha
+> 帮我截个屏
+> 打开网易云音乐搜索一首歌
+```
+
+详细说明、支持的设备列表、技术架构和尝试过的方案请参考：**[Computer Use 功能指南](docs/computer-use.md)**
 
 ---
 
