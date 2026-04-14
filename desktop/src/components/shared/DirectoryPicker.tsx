@@ -11,6 +11,11 @@ type Props = {
 
 type DirEntry = { name: string; path: string; isDirectory: boolean }
 
+// Module-level cache for recent projects (shared across instances, survives re-renders)
+let cachedProjects: RecentProject[] | null = null
+let cacheTimestamp = 0
+const CACHE_TTL = 30_000 // 30s
+
 function isTauriRuntime() {
   return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 }
@@ -69,12 +74,21 @@ export function DirectoryPicker({ value, onChange }: Props) {
     }
   }, [isOpen, updateDropdownPos])
 
-  // Load recent projects when opened
+  // Load recent projects when opened (with client-side cache)
   useEffect(() => {
     if (!isOpen || mode !== 'recent') return
+    // Use cache if fresh
+    if (cachedProjects && Date.now() - cacheTimestamp < CACHE_TTL) {
+      setProjects(cachedProjects)
+      return
+    }
     setLoading(true)
     sessionsApi.getRecentProjects()
-      .then(({ projects }) => setProjects(projects))
+      .then(({ projects: p }) => {
+        cachedProjects = p
+        cacheTimestamp = Date.now()
+        setProjects(p)
+      })
       .catch(() => setProjects([]))
       .finally(() => setLoading(false))
   }, [isOpen, mode])
@@ -94,6 +108,8 @@ export function DirectoryPicker({ value, onChange }: Props) {
     onChange(path)
     setIsOpen(false)
     setMode('recent')
+    // Invalidate cache so next open reflects the new selection
+    cachedProjects = null
   }
 
   const handleChooseFolder = async () => {

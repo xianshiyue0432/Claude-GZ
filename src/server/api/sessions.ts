@@ -244,14 +244,22 @@ async function patchSession(req: Request, sessionId: string): Promise<Response> 
   return Response.json({ ok: true })
 }
 
+// In-memory cache for recent projects (TTL: 30s)
+let recentProjectsCache: { data: Response; timestamp: number } | null = null
+const RECENT_PROJECTS_CACHE_TTL = 30_000
+
 async function getRecentProjects(): Promise<Response> {
+  // Return cached response if fresh
+  if (recentProjectsCache && Date.now() - recentProjectsCache.timestamp < RECENT_PROJECTS_CACHE_TTL) {
+    return recentProjectsCache.data.clone()
+  }
+
   const { sessions } = await sessionService.listSessions({ limit: 200 })
   const validSessions = sessions.filter((session) => session.workDirExists && session.workDir)
 
   // First pass: resolve realPath for each session and group by realPath to dedup
   const realPathMap = new Map<string, { projectPath: string; modifiedAt: string; sessionCount: number; sessionId: string }>()
   for (const s of validSessions) {
-    // Resolve the real path for dedup
     let realPath: string
     try {
       const workDir = await sessionService.getSessionWorkDir(s.id)
@@ -273,57 +281,58 @@ async function getRecentProjects(): Promise<Response> {
     }
   }
 
-  // Build project list with git info
-  const projects: Array<{
-    projectPath: string
-    realPath: string
-    projectName: string
-    isGit: boolean
-    repoName: string | null
-    branch: string | null
-    modifiedAt: string
-    sessionCount: number
-  }> = []
+  // Build project list with git info — parallelize git operations
+  const entries = Array.from(realPathMap.entries())
+  const projects = await Promise.all(
+    entries.map(async ([realPath, info]) => {
+      const projectName = realPath.split('/').filter(Boolean).pop() || info.projectPath
 
-  for (const [realPath, info] of realPathMap) {
-    const projectName = realPath.split('/').filter(Boolean).pop() || info.projectPath
-
-    // Check if it's a git repo
-    let isGit = false
-    let repoName: string | null = null
-    let branch: string | null = null
-    try {
-      const proc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
-        cwd: realPath, stdout: 'pipe', stderr: 'pipe',
-      })
-      const out = await new Response(proc.stdout).text()
-      isGit = out.trim() === 'true'
-
-      if (isGit) {
-        const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      let isGit = false
+      let repoName: string | null = null
+      let branch: string | null = null
+      try {
+        const proc = Bun.spawn(['git', 'rev-parse', '--is-inside-work-tree'], {
           cwd: realPath, stdout: 'pipe', stderr: 'pipe',
         })
-        branch = (await new Response(branchProc.stdout).text()).trim() || null
+        const out = await new Response(proc.stdout).text()
+        isGit = out.trim() === 'true'
 
-        try {
-          const remoteProc = Bun.spawn(['git', 'remote', 'get-url', 'origin'], {
-            cwd: realPath, stdout: 'pipe', stderr: 'pipe',
-          })
-          const remote = (await new Response(remoteProc.stdout).text()).trim()
-          const match = remote.match(/:([^/]+\/[^/]+?)(?:\.git)?$/) || remote.match(/\/([^/]+\/[^/]+?)(?:\.git)?$/)
-          repoName = match ? match[1]! : null
-        } catch { /* no remote */ }
+        if (isGit) {
+          // Run branch + remote in parallel
+          const [branchResult, remoteResult] = await Promise.all([
+            (async () => {
+              const branchProc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+                cwd: realPath, stdout: 'pipe', stderr: 'pipe',
+              })
+              return (await new Response(branchProc.stdout).text()).trim() || null
+            })(),
+            (async () => {
+              try {
+                const remoteProc = Bun.spawn(['git', 'remote', 'get-url', 'origin'], {
+                  cwd: realPath, stdout: 'pipe', stderr: 'pipe',
+                })
+                const remote = (await new Response(remoteProc.stdout).text()).trim()
+                const match = remote.match(/:([^/]+\/[^/]+?)(?:\.git)?$/) || remote.match(/\/([^/]+\/[^/]+?)(?:\.git)?$/)
+                return match ? match[1]! : null
+              } catch { return null }
+            })(),
+          ])
+          branch = branchResult
+          repoName = remoteResult
+        }
+      } catch { /* not a git repo or dir doesn't exist */ }
+
+      return {
+        projectPath: info.projectPath, realPath, projectName, isGit, repoName, branch,
+        modifiedAt: info.modifiedAt, sessionCount: info.sessionCount,
       }
-    } catch { /* not a git repo or dir doesn't exist */ }
-
-    projects.push({
-      projectPath: info.projectPath, realPath, projectName, isGit, repoName, branch,
-      modifiedAt: info.modifiedAt, sessionCount: info.sessionCount,
     })
-  }
+  )
 
   // Sort by most recent
   projects.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt))
 
-  return Response.json({ projects: projects.slice(0, 10) })
+  const response = Response.json({ projects: projects.slice(0, 10) })
+  recentProjectsCache = { data: response.clone(), timestamp: Date.now() }
+  return response
 }
