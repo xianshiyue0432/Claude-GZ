@@ -197,15 +197,20 @@ export function ChatInput({ variant = 'default' }: ChatInputProps) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [fileSearchOpen])
 
+  const allSlashCommands = useMemo(
+    () => mergeSlashCommands(slashCommands, FALLBACK_SLASH_COMMANDS),
+    [slashCommands],
+  )
+
   const filteredCommands = useMemo(() => {
-    const source = mergeSlashCommands(slashCommands, FALLBACK_SLASH_COMMANDS)
+    const source = allSlashCommands
     if (!slashFilter) return source
     const lower = slashFilter.toLowerCase()
     return source.filter((command) => (
       command.name.toLowerCase().includes(lower) ||
       command.description.toLowerCase().includes(lower)
     ))
-  }, [slashCommands, slashFilter])
+  }, [allSlashCommands, slashFilter])
 
   const exactSlashCommand = useMemo(() => {
     const normalized = slashFilter.trim().toLowerCase()
@@ -355,6 +360,14 @@ export function ChatInput({ variant = 'default' }: ChatInputProps) {
       }
       // Other keys (typing) should go to the textarea - let it propagate
       return
+    }
+
+    if (localSlashPanel) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setLocalSlashPanel(null)
+        return
+      }
     }
 
     if (slashMenuOpen && filteredCommands.length > 0) {
@@ -540,7 +553,9 @@ export function ChatInput({ variant = 'default' }: ChatInputProps) {
             <div ref={slashMenuRef}>
               <LocalSlashCommandPanel
                 command={localSlashPanel}
+                sessionId={activeTabId ?? undefined}
                 cwd={resolvedWorkDir}
+                commands={allSlashCommands}
                 onClose={() => setLocalSlashPanel(null)}
               />
             </div>

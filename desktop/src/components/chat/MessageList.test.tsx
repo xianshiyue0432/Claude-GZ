@@ -129,7 +129,7 @@ describe('MessageList nested tool calls', () => {
     expect(toolGroups.map((item) => item.toolCalls[0]?.toolUseId)).toEqual(['agent-1', 'write-1'])
   })
 
-  it('keeps later nested tool calls after an interleaved user message', () => {
+  it('keeps later nested tool calls under their parent after an interleaved user message', () => {
     const messages: UIMessage[] = [
       {
         id: 'tool-agent',
@@ -175,11 +175,37 @@ describe('MessageList nested tool calls', () => {
     expect(renderedKinds).toEqual([
       'tool:agent-1',
       'message:user-follow-up',
-      'tool:write-1',
     ])
     expect(
       (childToolCallsByParent.get('agent-1') ?? []).map((toolCall) => toolCall.toolUseId),
-    ).toEqual(['read-1'])
+    ).toEqual(['read-1', 'write-1'])
+  })
+
+  it('does not render parented orphan tool results as root session messages', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'tool-agent',
+        type: 'tool_use',
+        toolName: 'Agent',
+        toolUseId: 'agent-1',
+        input: { description: 'Inspect src/components' },
+        timestamp: 1,
+      },
+      {
+        id: 'result-child',
+        type: 'tool_result',
+        toolUseId: 'grep-1',
+        content: 'Found 22 files',
+        isError: false,
+        timestamp: 2,
+        parentToolUseId: 'agent-1',
+      },
+    ]
+
+    const { renderItems } = buildRenderModel(messages)
+
+    expect(renderItems).toHaveLength(1)
+    expect(renderItems[0]).toMatchObject({ kind: 'tool_group' })
   })
 
   it('shows failed agent status and compact unavailable summary for Explore launch errors', () => {
@@ -235,7 +261,13 @@ describe('MessageList nested tool calls', () => {
               toolUseId: 'agent-1',
               content: {
                 status: 'completed',
-                content: [{ type: 'text', text: longResult }],
+                content: [
+                  { type: 'text', text: longResult },
+                  {
+                    type: 'text',
+                    text: "agentId: a0c0c732f61442dc1 (use SendMessage with to: 'a0c0c732f61442dc1' to continue this agent)\n<usage>total_tokens: 17195\ntool_uses: 2\nduration_ms: 41368</usage>",
+                  },
+                ],
               },
               isError: false,
               timestamp: 2,
@@ -254,6 +286,8 @@ describe('MessageList nested tool calls', () => {
 
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText(/第二段补充内容用于验证 dialog 展示的是完整结果而不是截断摘要。/)).toBeTruthy()
+    expect(within(dialog).queryByText(/agentId:/)).toBeNull()
+    expect(within(dialog).queryByText(/total_tokens/)).toBeNull()
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeTruthy()
   })
 
@@ -532,6 +566,7 @@ describe('MessageList nested tool calls', () => {
   it('opens a rewind preview modal for user messages', async () => {
     vi.spyOn(sessionsApi, 'rewind').mockResolvedValue({
       target: {
+        targetUserMessageId: 'user-1',
         userMessageIndex: 0,
         userMessageCount: 1,
       },
@@ -570,8 +605,80 @@ describe('MessageList nested tool calls', () => {
     expect(within(dialog).getByText('回到这一步重做')).toBeTruthy()
     expect(within(dialog).getByText('src/example.ts')).toBeTruthy()
     expect(sessionsApi.rewind).toHaveBeenCalledWith(ACTIVE_TAB, {
+      targetUserMessageId: 'user-1',
       userMessageIndex: 0,
+      expectedContent: '回到这一步重做',
       dryRun: true,
+    })
+  })
+
+  it('confirms rewind with the selected message id and prompt guard', async () => {
+    vi.spyOn(sessionsApi, 'rewind').mockResolvedValue({
+      target: {
+        targetUserMessageId: 'user-2',
+        userMessageIndex: 1,
+        userMessageCount: 2,
+      },
+      conversation: {
+        messagesRemoved: 2,
+      },
+      code: {
+        available: false,
+        filesChanged: [],
+        insertions: 0,
+        deletions: 0,
+      },
+    })
+    const reloadHistory = vi.fn().mockResolvedValue(undefined)
+    const queueComposerPrefill = vi.fn()
+
+    useChatStore.setState({
+      reloadHistory,
+      queueComposerPrefill,
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: '第一段',
+              timestamp: 1,
+            },
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: 'ok',
+              timestamp: 2,
+            },
+            {
+              id: 'user-2',
+              type: 'user_text',
+              content: '第二段',
+              timestamp: 3,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    const buttons = screen.getAllByRole('button', { name: 'Rewind to here' })
+    fireEvent.click(buttons[1]!)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /Rewind here/ }))
+
+    await waitFor(() => {
+      expect(sessionsApi.rewind).toHaveBeenLastCalledWith(ACTIVE_TAB, {
+        targetUserMessageId: 'user-2',
+        userMessageIndex: 1,
+        expectedContent: '第二段',
+      })
+    })
+    expect(reloadHistory).toHaveBeenCalledWith(ACTIVE_TAB)
+    expect(queueComposerPrefill).toHaveBeenCalledWith(ACTIVE_TAB, {
+      text: '第二段',
+      attachments: undefined,
     })
   })
 

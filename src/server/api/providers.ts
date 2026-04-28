@@ -27,18 +27,6 @@ import { ApiError, errorResponse } from '../middleware/errorHandler.js'
 
 const providerService = new ProviderService()
 
-function maskApiKey(key: string): string {
-  if (key.length <= 8) return '****'
-  return key.slice(0, 4) + '****' + key.slice(-4)
-}
-
-function sanitizeProvider(provider: Record<string, unknown>): Record<string, unknown> {
-  if (typeof provider.apiKey === 'string') {
-    return { ...provider, apiKey: maskApiKey(provider.apiKey) }
-  }
-  return provider
-}
-
 export async function handleProvidersApi(
   req: Request,
   _url: URL,
@@ -87,7 +75,7 @@ export async function handleProvidersApi(
     if (!id) {
       if (req.method === 'GET') {
         const { providers, activeId } = await providerService.listProviders()
-        return Response.json({ providers: providers.map(sanitizeProvider), activeId })
+        return Response.json({ providers, activeId })
       }
       if (req.method === 'POST') {
         return await handleCreate(req)
@@ -117,7 +105,7 @@ export async function handleProvidersApi(
     // /api/providers/:id
     if (req.method === 'GET') {
       const provider = await providerService.getProvider(id)
-      return Response.json({ provider: sanitizeProvider(provider) })
+      return Response.json({ provider })
     }
     if (req.method === 'PUT') {
       return await handleUpdate(req, id)

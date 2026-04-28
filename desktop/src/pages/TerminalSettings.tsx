@@ -15,7 +15,19 @@ const STATUS_LABEL_KEYS: Record<TerminalStatus, TranslationKey> = {
   unavailable: 'settings.terminal.status.unavailable',
 }
 
-export function TerminalSettings() {
+type TerminalSettingsProps = {
+  active?: boolean
+  onNewTerminal?: () => void
+  testId?: string
+  workspace?: boolean
+}
+
+export function TerminalSettings({
+  active = true,
+  onNewTerminal,
+  testId = 'settings-terminal-host',
+  workspace = false,
+}: TerminalSettingsProps = {}) {
   const t = useTranslation()
   const hostRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<XTermTerminal | null>(null)
@@ -168,13 +180,19 @@ export function TerminalSettings() {
     }
   }, [resizeSession, startTerminal])
 
+  useEffect(() => {
+    if (active) {
+      requestAnimationFrame(() => resizeSession())
+    }
+  }, [active, resizeSession])
+
   const clearTerminal = () => {
     terminalRef.current?.clear()
   }
 
   return (
-    <div className="flex h-full min-h-[620px] flex-col overflow-hidden">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div className={`flex h-full flex-col overflow-hidden ${workspace ? 'min-h-0 bg-[var(--color-surface)] px-5 py-4' : 'min-h-[620px]'}`}>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             {t('settings.terminal.title')}
@@ -184,6 +202,16 @@ export function TerminalSettings() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {onNewTerminal && (
+            <button
+              type="button"
+              onClick={onNewTerminal}
+              className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] px-2.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              {t('terminal.newTab')}
+            </button>
+          )}
           <button
             type="button"
             onClick={clearTerminal}
@@ -247,7 +275,7 @@ export function TerminalSettings() {
           </div>
           <div
             ref={hostRef}
-            data-testid="settings-terminal-host"
+            data-testid={testId}
             className="settings-terminal-host h-[calc(100%-2rem)] w-full overflow-hidden p-2"
           />
         </div>

@@ -85,8 +85,10 @@ describe('Content-only pages render without errors', () => {
     expect(await screen.findByText('/lark-mail')).toBeInTheDocument()
     expect(screen.getByText('/mcp')).toBeInTheDocument()
     expect(screen.getByText('/skills')).toBeInTheDocument()
+    expect(screen.getByText('/help')).toBeInTheDocument()
     expect(screen.getByText('/plugin')).toBeInTheDocument()
-    expect(screen.getByText('/plugins')).toBeInTheDocument()
+    expect(screen.getByText('/context')).toBeInTheDocument()
+    expect(screen.queryByText('/plugins')).not.toBeInTheDocument()
     expect(screen.queryByText('/internal-only')).not.toBeInTheDocument()
   })
 
@@ -294,7 +296,7 @@ describe('Content-only pages render without errors', () => {
 
     render(<ActiveSession />)
 
-    const textarea = screen.getByPlaceholderText('Ask anything...')
+    const textarea = screen.getByRole('textbox')
     fireEvent.change(textarea, { target: { value: '/mcp', selectionStart: 4 } })
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
 
@@ -366,7 +368,7 @@ describe('Content-only pages render without errors', () => {
 
     render(<ActiveSession />)
 
-    const textarea = screen.getByPlaceholderText('Ask anything...')
+    const textarea = screen.getByRole('textbox')
     fireEvent.change(textarea, { target: { value: '/skills', selectionStart: 7 } })
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
 
@@ -424,13 +426,79 @@ describe('Content-only pages render without errors', () => {
 
     render(<ActiveSession />)
 
-    const textarea = screen.getByPlaceholderText('Ask anything...')
+    const textarea = screen.getByRole('textbox')
     fireEvent.change(textarea, { target: { value: '/plugin', selectionStart: 7 } })
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
 
     expect(sendMessage).not.toHaveBeenCalled()
     expect(useTabStore.getState().activeTabId).toBe('__settings__')
     expect(useUIStore.getState().pendingSettingsTab).toBe('plugins')
+
+    useTabStore.setState({ tabs: [], activeTabId: null })
+    useSessionStore.setState({ sessions: [], activeSessionId: null, isLoading: false, error: null })
+    useChatStore.setState({ sessions: {} })
+  })
+
+  it('ActiveSession routes /help to the local command panel', () => {
+    const SESSION_ID = 'help-panel-session'
+    const sendMessage = vi.fn()
+    useTabStore.setState({ tabs: [{ sessionId: SESSION_ID, title: 'Test', type: 'session' as const, status: 'idle' }], activeTabId: SESSION_ID })
+    useSessionStore.setState({
+      sessions: [{
+        id: SESSION_ID,
+        title: 'Test',
+        createdAt: '2026-04-10T00:00:00.000Z',
+        modifiedAt: '2026-04-10T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/workspace/project',
+        workDir: '/workspace/project',
+        workDirExists: true,
+      }],
+      activeSessionId: SESSION_ID,
+      isLoading: false,
+      error: null,
+    })
+    useChatStore.setState({
+      sessions: {
+        [SESSION_ID]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [
+            { name: 'cost', description: 'Show token usage and costs' },
+            ...Array.from({ length: 14 }, (_, index) => ({
+              name: `extra-${index + 1}`,
+              description: `Extra command ${index + 1}`,
+            })),
+          ],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+      sendMessage,
+    })
+
+    render(<ActiveSession />)
+
+    const textarea = screen.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: '/help', selectionStart: 5 } })
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(screen.getByText('Slash commands')).toBeInTheDocument()
+    expect(screen.getByText('/clear')).toBeInTheDocument()
+    expect(screen.getByText('/cost')).toBeInTheDocument()
+    expect(screen.getByText('13 more commands available. Type / to search the full command list.')).toBeInTheDocument()
 
     useTabStore.setState({ tabs: [], activeTabId: null })
     useSessionStore.setState({ sessions: [], activeSessionId: null, isLoading: false, error: null })

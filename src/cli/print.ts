@@ -259,6 +259,7 @@ import {
 } from 'src/utils/messages/mappers.js'
 import { createModelSwitchBreadcrumbs } from 'src/utils/messages.js'
 import { collectContextData } from 'src/commands/context/context-noninteractive.js'
+import { getSessionUsageSnapshot } from 'src/cost-tracker.js'
 import { LOCAL_COMMAND_STDOUT_TAG } from 'src/constants/xml.js'
 import {
   statusListeners,
@@ -2958,6 +2959,8 @@ function runHeadlessStreaming(
           sendControlResponseSuccess(message, {
             mcpServers: buildMcpServerStatuses(),
           })
+        } else if (message.request.subtype === 'get_session_usage') {
+          sendControlResponseSuccess(message, getSessionUsageSnapshot())
         } else if (message.request.subtype === 'get_context_usage') {
           try {
             const appState = getAppState()

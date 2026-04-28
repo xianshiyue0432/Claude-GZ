@@ -11,6 +11,7 @@ vi.mock('../../i18n', () => ({
     const translations: Record<string, string> = {
       'sidebar.newSession': 'New Session',
       'sidebar.scheduled': 'Scheduled',
+      'sidebar.terminal': 'Terminal',
       'sidebar.settings': 'Settings',
       'sidebar.searchPlaceholder': 'Search sessions',
       'sidebar.noSessions': 'No sessions',
@@ -102,6 +103,26 @@ describe('Sidebar', () => {
     ])
     expect(useTabStore.getState().activeTabId).toBe('session-new-1')
     expect(screen.getByRole('complementary')).not.toHaveAttribute('data-tauri-drag-region')
+  })
+
+  it('opens each terminal click as a first-class app tab', () => {
+    render(<Sidebar />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Terminal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Terminal' }))
+
+    const terminalTabs = useTabStore.getState().tabs.filter((tab) => tab.type === 'terminal')
+    expect(terminalTabs).toHaveLength(2)
+    expect(terminalTabs.map((tab) => tab.title)).toEqual(['Terminal 1', 'Terminal 2'])
+    expect(useTabStore.getState().activeTabId).toBe(terminalTabs[1]!.sessionId)
+
+    useTabStore.getState().closeTab(terminalTabs[0]!.sessionId)
+    useTabStore.getState().openTerminalTab()
+
+    expect(useTabStore.getState().tabs.filter((tab) => tab.type === 'terminal').map((tab) => tab.title)).toEqual([
+      'Terminal 2',
+      'Terminal 3',
+    ])
   })
 
   it('shows a toast when session creation fails', async () => {

@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const terminalMocks = vi.hoisted(() => {
   const terminalInstance = {
@@ -54,6 +55,7 @@ import { TerminalSettings } from './TerminalSettings'
 
 describe('TerminalSettings', () => {
   beforeEach(() => {
+    useSettingsStore.setState({ locale: 'en' })
     terminalMocks.available = false
     terminalMocks.spawn.mockReset()
     terminalMocks.write.mockReset()

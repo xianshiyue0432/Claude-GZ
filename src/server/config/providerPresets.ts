@@ -21,6 +21,10 @@ const ProviderPresetSchema = z.object({
   defaultModels: ModelMappingSchema,
   needsApiKey: z.boolean(),
   websiteUrl: z.string(),
+  apiKeyUrl: z.string().optional(),
+  promoText: z.string().optional(),
+  featured: z.boolean().optional(),
+  defaultEnv: z.record(z.string(), z.string()).optional(),
 })
 
 const ProviderPresetsSchema = z.array(ProviderPresetSchema)

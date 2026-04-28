@@ -212,9 +212,37 @@ http://127.0.0.1:2024
 
 本项目由个人利用业余时间维护，欢迎企业或个人赞助支持持续开发，也可洽谈定制、集成或商务合作。
 
-| 赞助商 | 介绍 |
-|------|------|
-| <a href="https://legionproxy.io/?utm_source=github&utm_campaign=mediacrawler"><img src="docs/images/sponsors/legionproxy-logo.svg" width="180" alt="LegionProxy"></a> | [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=mediacrawler) 住宅代理专为账号注册与自动化打造，提供 74M+ 真实住宅 IP、195+ 国家覆盖、HTTP/3 高速连接，$0.60/GB 起。 |
+<table>
+  <thead>
+    <tr>
+      <th width="220">赞助商</th>
+      <th align="left">介绍</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center" valign="middle">
+        <a href="https://jiekou.ai/referral?invited_code=OBNU3K">
+          <img src="docs/images/sponsors/jiekou-logo.svg" width="72" alt="接口AI"><br>
+          <strong>接口AI</strong>
+        </a>
+      </td>
+      <td valign="middle">
+        感谢 <a href="https://jiekou.ai/referral?invited_code=OBNU3K">接口AI</a> 赞助本项目！接口AI 提供官方资源直供与稳定高性能 API 体验，订阅包价格为官方 8 折；使用 <a href="https://jiekou.ai/referral?invited_code=OBNU3K">专属链接</a> 注册并绑定 GitHub，可领取 3 美元优惠券。
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle">
+        <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">
+          <img src="docs/images/sponsors/shengsuanyun-logo.svg" width="180" alt="胜算云">
+        </a>
+      </td>
+      <td valign="middle">
+        感谢 <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">胜算云</a> 赞助本项目！胜算云是面向 AI Native Teams 的工业级 AI 任务并行执行平台，聚合 Claude、ChatGPT、Gemini 等海内外 LLM 及图片、视频多媒体模型算力；官方直连、非逆向，平台 SLA 可用性达 99.7%，可查看 <a href="https://watch.shengsuanyun.com/status/shengsuanyun">服务状态</a>。平台支持企业专属网关、成本与权限管控、智能路由、安全防护和 BYOK，按量与 tokens plan（即将上线）计费并可开票；使用 <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">专属链接</a> 注册可获 10 元模力及首充 10% 赠送。
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 📧 **联系邮箱**：relakkes@gmail.com
 
@@ -242,6 +270,16 @@ http://127.0.0.1:2024
 </td>
 </tr>
 </table>
+
+---
+
+## 感谢
+
+感谢以下开源项目和社区实践为本项目提供参考与启发：
+
+- [React](https://github.com/facebook/react)：前端工程与组件化 UI 生态。
+- [Tauri](https://github.com/tauri-apps/tauri)：跨端桌面应用能力与工程实践。
+- [cc-switch](https://github.com/farion1231/cc-switch)：模型供应商配置能力参考。
 
 ---
 

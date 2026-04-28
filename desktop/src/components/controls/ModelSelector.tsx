@@ -278,7 +278,7 @@ export function ModelSelector({
                             className={`
                               w-full rounded-lg border px-3 py-2.5 text-left transition-colors
                               ${isSelected
-                                ? 'border-[var(--color-brand)]/20 bg-[var(--color-primary-fixed)]'
+                                ? 'border-[var(--color-model-option-selected-border)] bg-[var(--color-model-option-selected-bg)]'
                                 : 'border-transparent hover:bg-[var(--color-surface-hover)]'
                               }
                             `}
@@ -328,7 +328,7 @@ export function ModelSelector({
                       className={`
                         w-full rounded-lg px-3 py-2.5 text-left transition-colors
                         ${isSelected
-                          ? 'bg-[var(--color-primary-fixed)] border border-[var(--color-brand)]/20'
+                          ? 'border border-[var(--color-model-option-selected-border)] bg-[var(--color-model-option-selected-bg)]'
                           : 'hover:bg-[var(--color-surface-hover)]'
                         }
                       `}

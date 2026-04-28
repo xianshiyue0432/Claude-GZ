@@ -4,6 +4,7 @@ import {
   insertSlashTrigger,
   mergeSlashCommands,
   replaceSlashCommand,
+  resolveSlashUiAction,
 } from './composerUtils'
 
 describe('composerUtils', () => {
@@ -35,8 +36,9 @@ describe('composerUtils', () => {
       ]),
     ).toEqual(
       expect.arrayContaining([
-        { name: 'help', description: 'Show available commands' },
+        { name: 'help', description: 'Show available desktop and agent commands' },
         { name: 'clear', description: 'Clear conversation history' },
+        { name: 'context', description: 'Show current context usage' },
       ]),
     )
   })
@@ -51,5 +53,17 @@ describe('composerUtils', () => {
         { name: 'clear', description: 'Server description' },
       ]),
     )
+  })
+
+  it('resolves hidden settings aliases without displaying duplicate fallback rows', () => {
+    expect(resolveSlashUiAction('plugins')).toEqual({ type: 'settings', tab: 'plugins' })
+    expect(mergeSlashCommands([]).map((command) => command.name)).toContain('plugin')
+    expect(mergeSlashCommands([]).map((command) => command.name)).not.toContain('plugins')
+  })
+
+  it('routes session inspection commands to the desktop panel', () => {
+    expect(resolveSlashUiAction('cost')).toEqual({ type: 'panel', command: 'cost' })
+    expect(resolveSlashUiAction('context')).toEqual({ type: 'panel', command: 'context' })
+    expect(resolveSlashUiAction('status')).toEqual({ type: 'panel', command: 'status' })
   })
 })

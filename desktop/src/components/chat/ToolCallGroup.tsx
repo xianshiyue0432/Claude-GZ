@@ -288,7 +288,7 @@ function AgentCallCard({
         : ''
   const fullOutputText =
     result && !result.isError && !isLaunchResult && !isAgentLifecycleResult(result.content)
-      ? extractTextContent(result.content).trim()
+      ? extractAgentDisplayText(result.content).trim()
       : ''
   const previewText = fullOutputText || (status === 'done' || status === 'stopped' ? taskSummary : '')
   const outputSummary = previewText ? getAgentOutputSummary(previewText) : ''
@@ -377,15 +377,8 @@ function AgentCallCard({
               ))}
             </div>
           ) : outputSummary ? (
-            <div className="rounded-lg border border-[var(--color-border)]/60 bg-[var(--color-surface)] px-3 py-3">
-              <div className="line-clamp-3 text-[11px] leading-[1.55] text-[var(--color-text-secondary)]">
-                {outputSummary}
-              </div>
-              <div className="mt-3 flex justify-end">
-                <span className="text-[10px] text-[var(--color-text-tertiary)]">
-                  {t('agentStatus.viewResult')}
-                </span>
-              </div>
+            <div className="text-[11px] text-[var(--color-text-tertiary)]">
+              {t('agentStatus.noActivity')}
             </div>
           ) : (
             <div className="text-[11px] text-[var(--color-text-tertiary)]">
@@ -550,6 +543,19 @@ function getAgentOutputSummary(content: string): string {
   const text = content.replace(/\s+\n/g, '\n').trim()
   if (!text) return ''
   return text.length > 220 ? `${text.slice(0, 220)}...` : text
+}
+
+function extractAgentDisplayText(content: unknown): string {
+  return stripAgentResultMetadata(extractTextContent(content))
+}
+
+function stripAgentResultMetadata(text: string): string {
+  return text
+    .replace(/^\s*agentId:.*(?:\r?\n)?/gm, '')
+    .replace(/<usage>[\s\S]*?<\/usage>/g, '')
+    .replace(/^\s*(?:total_tokens|tool_uses|duration_ms):\s*\d+\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 function isAgentLaunchResult(content: unknown): boolean {

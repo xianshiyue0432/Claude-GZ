@@ -46,6 +46,21 @@ async function writeSessionFile(
   return filePath
 }
 
+async function writeSubagentTranscriptFile(
+  projectDir: string,
+  sessionId: string,
+  agentId: string,
+  entries: Record<string, unknown>[],
+): Promise<string> {
+  const dir = path.join(tmpDir, 'projects', projectDir, sessionId, 'subagents')
+  await fs.mkdir(dir, { recursive: true })
+  const normalizedAgentId = agentId.startsWith('agent-') ? agentId : `agent-${agentId}`
+  const filePath = path.join(dir, `${normalizedAgentId}.jsonl`)
+  const content = entries.map((e) => JSON.stringify(e)).join('\n') + '\n'
+  await fs.writeFile(filePath, content, 'utf-8')
+  return filePath
+}
+
 async function writeSkill(
   rootDir: string,
   skillName: string,
@@ -287,6 +302,110 @@ describe('SessionService', () => {
 
     const messages = await service.getSessionMessages(sessionId)
     expect(messages).toHaveLength(2)
+  })
+
+  it('should append subagent tool calls under their parent agent tool result', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const projectDir = '-tmp-project'
+    const agentId = 'abc123'
+
+    await writeSessionFile(projectDir, sessionId, [
+      makeSnapshotEntry(),
+      makeUserEntry('Dispatch an agent'),
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'Agent:0',
+              name: 'Agent',
+              input: { description: 'Inspect alpha' },
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:02.000Z',
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'Agent:0',
+              content: [
+                {
+                  type: 'text',
+                  text: `alpha summary\nagentId: ${agentId} (use SendMessage with to: '${agentId}' to continue this agent)\n<usage>total_tokens: 10\ntool_uses: 2\nduration_ms: 30</usage>`,
+                },
+              ],
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:03.000Z',
+      },
+    ])
+    await writeSubagentTranscriptFile(projectDir, sessionId, agentId, [
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'Read:0',
+              name: 'Read',
+              input: { file_path: '/tmp/alpha.txt' },
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:04.000Z',
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'Read:0',
+              content: 'alpha body',
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:05.000Z',
+      },
+    ])
+
+    const messages = await service.getSessionMessages(sessionId)
+    const childToolUse = messages.find(
+      (message) => message.type === 'tool_use' && message.parentToolUseId === 'Agent:0',
+    )
+    const childToolResult = messages.find(
+      (message) => message.type === 'tool_result' && message.parentToolUseId === 'Agent:0',
+    )
+
+    expect(childToolUse?.content).toEqual([
+      {
+        type: 'tool_use',
+        id: 'Agent:0/abc123/Read:0',
+        name: 'Read',
+        input: { file_path: '/tmp/alpha.txt' },
+      },
+    ])
+    expect(childToolResult?.content).toEqual([
+      {
+        type: 'tool_result',
+        tool_use_id: 'Agent:0/abc123/Read:0',
+        content: 'alpha body',
+      },
+    ])
   })
 
   it('should hide synthetic interruption, no-response, and command breadcrumb transcript entries', async () => {
@@ -906,6 +1025,100 @@ describe('Sessions API', () => {
     expect(remainingMessages.map((message) => message.id)).toEqual([
       firstUserId,
       firstAssistantId,
+    ])
+  })
+
+  it('POST /api/sessions/:id/rewind should target the selected message id instead of a shifted visible index', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-ffffffffffff'
+    const firstUserId = crypto.randomUUID()
+    const firstAssistantId = crypto.randomUUID()
+    const hiddenUserId = crypto.randomUUID()
+    const targetUserId = crypto.randomUUID()
+    const targetAssistantId = crypto.randomUUID()
+
+    await writeSessionFile('-tmp-api-rewind-id-target', sessionId, [
+      makeSnapshotEntry(),
+      makeUserEntry('first prompt', firstUserId),
+      {
+        ...makeAssistantEntry('first reply', firstUserId),
+        uuid: firstAssistantId,
+      },
+      makeUserEntry(
+        '<teammate-message teammate_id="reviewer">internal status that the main chat hides</teammate-message>',
+        hiddenUserId,
+      ),
+      makeUserEntry('second visible prompt', targetUserId),
+      {
+        ...makeAssistantEntry('second reply', targetUserId),
+        uuid: targetAssistantId,
+      },
+    ])
+
+    const executeRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/rewind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userMessageIndex: 1,
+        targetUserMessageId: targetUserId,
+        expectedContent: 'second visible prompt',
+      }),
+    })
+    expect(executeRes.status).toBe(200)
+
+    const executeBody = await executeRes.json() as {
+      target: { targetUserMessageId: string; userMessageIndex: number }
+      conversation: { messagesRemoved: number; removedMessageIds: string[] }
+    }
+    expect(executeBody.target.targetUserMessageId).toBe(targetUserId)
+    expect(executeBody.target.userMessageIndex).toBe(2)
+    expect(executeBody.conversation.messagesRemoved).toBe(2)
+    expect(executeBody.conversation.removedMessageIds).toEqual([
+      targetUserId,
+      targetAssistantId,
+    ])
+
+    const remainingMessages = await service.getSessionMessages(sessionId)
+    expect(remainingMessages.map((message) => message.id)).toEqual([
+      firstUserId,
+      firstAssistantId,
+      hiddenUserId,
+    ])
+  })
+
+  it('POST /api/sessions/:id/rewind should reject an index fallback when the selected prompt no longer matches', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-000000000000'
+    const firstUserId = crypto.randomUUID()
+    const hiddenUserId = crypto.randomUUID()
+    const targetUserId = crypto.randomUUID()
+
+    await writeSessionFile('-tmp-api-rewind-index-guard', sessionId, [
+      makeSnapshotEntry(),
+      makeUserEntry('first prompt', firstUserId),
+      makeUserEntry(
+        '<teammate-message teammate_id="reviewer">internal status that the main chat hides</teammate-message>',
+        hiddenUserId,
+      ),
+      makeUserEntry('second visible prompt', targetUserId),
+    ])
+
+    const executeRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/rewind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userMessageIndex: 1,
+        expectedContent: 'second visible prompt',
+      }),
+    })
+    expect(executeRes.status).toBe(400)
+
+    const body = await executeRes.json() as { message: string }
+    expect(body.message).toContain('does not match the selected prompt')
+
+    const remainingMessages = await service.getSessionMessages(sessionId)
+    expect(remainingMessages.map((message) => message.id)).toEqual([
+      firstUserId,
+      hiddenUserId,
+      targetUserId,
     ])
   })
 

@@ -68,6 +68,34 @@ export {
   getUsageForModel,
 }
 
+export type SessionUsageSnapshot = {
+  totalCostUSD: number
+  costDisplay: string
+  hasUnknownModelCost: boolean
+  totalAPIDuration: number
+  totalDuration: number
+  totalLinesAdded: number
+  totalLinesRemoved: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheReadInputTokens: number
+  totalCacheCreationInputTokens: number
+  totalWebSearchRequests: number
+  models: Array<{
+    model: string
+    displayName: string
+    inputTokens: number
+    outputTokens: number
+    cacheReadInputTokens: number
+    cacheCreationInputTokens: number
+    webSearchRequests: number
+    costUSD: number
+    costDisplay: string
+    contextWindow: number
+    maxOutputTokens: number
+  }>
+}
+
 type StoredCostState = {
   totalCostUSD: number
   totalAPIDuration: number
@@ -241,6 +269,36 @@ Total duration (wall): ${formatDuration(getTotalDuration())}
 Total code changes:    ${getTotalLinesAdded()} ${getTotalLinesAdded() === 1 ? 'line' : 'lines'} added, ${getTotalLinesRemoved()} ${getTotalLinesRemoved() === 1 ? 'line' : 'lines'} removed
 ${modelUsageDisplay}`,
   )
+}
+
+export function getSessionUsageSnapshot(): SessionUsageSnapshot {
+  return {
+    totalCostUSD: getTotalCostUSD(),
+    costDisplay: formatCost(getTotalCostUSD()),
+    hasUnknownModelCost: hasUnknownModelCost(),
+    totalAPIDuration: getTotalAPIDuration(),
+    totalDuration: getTotalDuration(),
+    totalLinesAdded: getTotalLinesAdded(),
+    totalLinesRemoved: getTotalLinesRemoved(),
+    totalInputTokens: getTotalInputTokens(),
+    totalOutputTokens: getTotalOutputTokens(),
+    totalCacheReadInputTokens: getTotalCacheReadInputTokens(),
+    totalCacheCreationInputTokens: getTotalCacheCreationInputTokens(),
+    totalWebSearchRequests: getTotalWebSearchRequests(),
+    models: Object.entries(getModelUsage()).map(([model, usage]) => ({
+      model,
+      displayName: getCanonicalName(model),
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      webSearchRequests: usage.webSearchRequests,
+      costUSD: usage.costUSD,
+      costDisplay: formatCost(usage.costUSD),
+      contextWindow: usage.contextWindow,
+      maxOutputTokens: usage.maxOutputTokens,
+    })),
+  }
 }
 
 function round(number: number, precision: number): number {

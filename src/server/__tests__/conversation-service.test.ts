@@ -191,6 +191,33 @@ describe('ConversationService', () => {
     expect(env.ANTHROPIC_MODEL).toBe('new-provider-sonnet')
   })
 
+  test('buildChildEnv preserves provider capability overrides from presets', async () => {
+    const providerService = new ProviderService()
+    const provider = await providerService.addProvider({
+      presetId: 'jiekouai',
+      name: 'Jiekou',
+      apiKey: 'provider-key',
+      baseUrl: 'https://api.jiekou.ai/anthropic',
+      apiFormat: 'anthropic',
+      models: {
+        main: 'claude-sonnet-4-6',
+        haiku: 'claude-haiku-4-5-20251001',
+        sonnet: 'claude-sonnet-4-6',
+        opus: 'claude-opus-4-7',
+      },
+    })
+
+    const service = new ConversationService() as any
+    const env = (await service.buildChildEnv('/tmp', undefined, {
+      providerId: provider.id,
+      model: 'claude-sonnet-4-6',
+    })) as Record<string, string>
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.jiekou.ai/anthropic')
+    expect(env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6')
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES).toBe('')
+  })
+
   test('buildChildEnv can force official auth even when a custom default provider exists', async () => {
     const ccHahaDir = path.join(tmpDir, 'cc-haha')
     await fs.mkdir(ccHahaDir, { recursive: true })

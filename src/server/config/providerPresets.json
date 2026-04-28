@@ -19,13 +19,14 @@
     "baseUrl": "https://api.deepseek.com/anthropic",
     "apiFormat": "anthropic",
     "defaultModels": {
-      "main": "deepseek-chat",
-      "haiku": "deepseek-chat",
-      "sonnet": "deepseek-chat",
-      "opus": "deepseek-chat"
+      "main": "deepseek-v4-pro",
+      "haiku": "deepseek-v4-flash",
+      "sonnet": "deepseek-v4-pro",
+      "opus": "deepseek-v4-pro"
     },
     "needsApiKey": true,
-    "websiteUrl": "https://platform.deepseek.com"
+    "websiteUrl": "https://platform.deepseek.com",
+    "apiKeyUrl": "https://platform.deepseek.com/api_keys"
   },
   {
     "id": "zhipuglm",
@@ -39,12 +40,14 @@
       "opus": "glm-5.1"
     },
     "needsApiKey": true,
-    "websiteUrl": "https://open.bigmodel.cn"
+    "websiteUrl": "https://open.bigmodel.cn",
+    "apiKeyUrl": "https://www.bigmodel.cn/invite?icode=d41B2qi8Z5xNwTGLNPPF3OZLO2QH3C0EBTSr%2BArzMw4%3D",
+    "promoText": "智谱 GLM 为 cc-haha 用户准备了专属邀请福利，使用此链接注册后可领取新用户权益。"
   },
   {
     "id": "kimi",
     "name": "Kimi",
-    "baseUrl": "https://api.moonshot.cn/anthropic",
+    "baseUrl": "https://api.kimi.com/coding",
     "apiFormat": "anthropic",
     "defaultModels": {
       "main": "kimi-k2.6",
@@ -53,7 +56,8 @@
       "opus": "kimi-k2.6"
     },
     "needsApiKey": true,
-    "websiteUrl": "https://platform.moonshot.cn"
+    "websiteUrl": "https://platform.moonshot.cn",
+    "apiKeyUrl": "https://platform.kimi.com/console/api-keys"
   },
   {
     "id": "minimax",
@@ -67,7 +71,86 @@
       "opus": "MiniMax-M2.7"
     },
     "needsApiKey": true,
-    "websiteUrl": "https://platform.minimaxi.com"
+    "websiteUrl": "https://platform.minimaxi.com",
+    "apiKeyUrl": "https://platform.minimaxi.com/subscribe/token-plan?code=1TG2Cseab2&source=link"
+  },
+  {
+    "id": "jiekouai",
+    "name": "接口AI",
+    "baseUrl": "https://api.jiekou.ai/anthropic",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "claude-sonnet-4-6",
+      "haiku": "claude-haiku-4-5-20251001",
+      "sonnet": "claude-sonnet-4-6",
+      "opus": "claude-opus-4-7"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://jiekou.ai",
+    "apiKeyUrl": "https://jiekou.ai/referral?invited_code=OBNU3K",
+    "promoText": "接口AI为 cc-haha 的用户提供官方资源与稳定高性能体验，订阅包价格为官方 8 折；绑定 GitHub 后还可领取 3 美元优惠券。",
+    "featured": true,
+    "defaultEnv": {
+      "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES": ""
+    }
+  },
+  {
+    "id": "shengsuanyun",
+    "name": "胜算云",
+    "baseUrl": "https://router.shengsuanyun.com/api",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "anthropic/claude-sonnet-4.6",
+      "haiku": "anthropic/claude-haiku-4.5:thinking",
+      "sonnet": "anthropic/claude-sonnet-4.6",
+      "opus": "anthropic/claude-opus-4.7"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://www.shengsuanyun.com",
+    "apiKeyUrl": "https://www.shengsuanyun.com/?from=CH_LEJ88KWR",
+    "promoText": "胜算云为 cc-haha 的用户提供了特别福利，使用此链接注册的新用户可获 10 元模力及首充 10% 赠送！",
+    "featured": true,
+    "defaultEnv": {
+      "API_TIMEOUT_MS": "3000000",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES": ""
+    }
+  },
+  {
+    "id": "lmstudio",
+    "name": "LM Studio",
+    "baseUrl": "http://localhost:1234",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "qwen/qwen3.6-27b",
+      "haiku": "qwen/qwen3.6-27b",
+      "sonnet": "qwen/qwen3.6-27b",
+      "opus": "qwen/qwen3.6-27b"
+    },
+    "needsApiKey": false,
+    "websiteUrl": "https://lmstudio.ai/docs/integrations/claude-code",
+    "promoText": "LM Studio 使用 Anthropic 兼容协议，Base URL 填 http://localhost:1234，不要追加 /v1。Claude Code 的提示词、工具和 Skill 会占用较多上下文，请在本地模型设置里把 Context Window 调大，建议至少 200K。",
+    "defaultEnv": {
+      "ANTHROPIC_AUTH_TOKEN": "lmstudio"
+    }
+  },
+  {
+    "id": "ollama",
+    "name": "Ollama",
+    "baseUrl": "http://localhost:11434",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "qwen3.6:27b",
+      "haiku": "qwen3.6:27b",
+      "sonnet": "qwen3.6:27b",
+      "opus": "qwen3.6:27b"
+    },
+    "needsApiKey": false,
+    "websiteUrl": "https://docs.ollama.com/integrations/claude-code",
+    "promoText": "Ollama 使用 Anthropic 兼容协议，Base URL 填 http://localhost:11434，不要追加 /v1。Claude Code 的提示词、工具和 Skill 会占用较多上下文，请在本地模型设置里把 Context Window 调大，建议至少 200K。",
+    "defaultEnv": {
+      "ANTHROPIC_AUTH_TOKEN": "ollama"
+    }
   },
   {
     "id": "custom",

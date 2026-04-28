@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from 'react'
 
 type DropdownItem<T extends string> = {
   value: T
@@ -12,8 +12,9 @@ type DropdownProps<T extends string> = {
   value: T
   onChange: (value: T) => void
   trigger: ReactNode
-  width?: number
+  width?: CSSProperties['width']
   align?: 'left' | 'right'
+  className?: string
 }
 
 export function Dropdown<T extends string>({
@@ -23,6 +24,7 @@ export function Dropdown<T extends string>({
   trigger,
   width = 320,
   align = 'left',
+  className = '',
 }: DropdownProps<T>) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -46,7 +48,7 @@ export function Dropdown<T extends string>({
   }, [open])
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <div ref={ref} className={`relative ${className || 'inline-block'}`}>
       <div onClick={() => setOpen(!open)} className="cursor-pointer">
         {trigger}
       </div>
@@ -54,8 +56,8 @@ export function Dropdown<T extends string>({
       {open && (
         <div
           className={`
-            absolute z-50 mt-1 py-1 rounded-[var(--radius-lg)]
-            bg-[var(--color-surface)] border border-[var(--color-border)]
+            absolute z-50 mt-1 overflow-hidden rounded-[var(--radius-lg)]
+            bg-[var(--color-surface-container-lowest)] border border-[var(--color-border)]
             shadow-[var(--shadow-dropdown)]
             animate-in fade-in slide-in-from-top-1
             ${align === 'right' ? 'right-0' : 'left-0'}
@@ -67,12 +69,13 @@ export function Dropdown<T extends string>({
               key={item.value}
               onClick={() => { onChange(item.value); setOpen(false) }}
               className={`
-                w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
-                hover:bg-[var(--color-surface-hover)]
+                w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors
+                hover:bg-[var(--color-surface-hover)] focus-visible:outline-none focus-visible:bg-[var(--color-surface-hover)]
+                ${item.value === value ? 'bg-[var(--color-model-option-selected-bg)]' : ''}
                 ${i > 0 ? 'border-t border-[var(--color-border-separator)]' : ''}
               `}
             >
-              {item.icon && <span className="text-lg flex-shrink-0">{item.icon}</span>}
+              {item.icon && <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center text-[var(--color-text-secondary)]">{item.icon}</span>}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-[var(--color-text-primary)]">{item.label}</div>
                 {item.description && (
@@ -80,7 +83,7 @@ export function Dropdown<T extends string>({
                 )}
               </div>
               {item.value === value && (
-                <span className="text-[var(--color-text-primary)] text-sm flex-shrink-0">✓</span>
+                <span className="material-symbols-outlined flex-shrink-0 text-[16px] text-[var(--color-brand)]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
               )}
             </button>
           ))}

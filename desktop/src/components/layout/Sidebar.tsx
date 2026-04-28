@@ -26,6 +26,7 @@ export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const activeTabId = useTabStore((s) => s.activeTabId)
+  const activeTabType = useTabStore((s) => s.tabs.find((tab) => tab.sessionId === s.activeTabId)?.type)
   const closeTab = useTabStore((s) => s.closeTab)
   const disconnectSession = useChatStore((s) => s.disconnectSession)
   const [searchQuery, setSearchQuery] = useState('')
@@ -201,6 +202,15 @@ export function Sidebar() {
           icon={<ClockIcon />}
         >
           {t('sidebar.scheduled')}
+        </NavItem>
+        <NavItem
+          active={activeTabType === 'terminal'}
+          collapsed={!sidebarOpen}
+          label={t('sidebar.terminal')}
+          onClick={() => useTabStore.getState().openTerminalTab()}
+          icon={<span className="material-symbols-outlined text-[18px]">terminal</span>}
+        >
+          {t('sidebar.terminal')}
         </NavItem>
       </div>
 

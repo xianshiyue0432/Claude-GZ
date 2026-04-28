@@ -206,6 +206,31 @@ describe('chatStore history mapping', () => {
     ])
   })
 
+  it('preserves source user ids when restoring array-content user prompts', () => {
+    const messages: MessageEntry[] = [
+      {
+        id: 'user-with-attachment',
+        type: 'user',
+        timestamp: '2026-04-06T00:00:00.000Z',
+        content: [
+          { type: 'text', text: '请看这个文件' },
+          { type: 'file', name: 'report.md' },
+        ],
+      },
+    ]
+
+    const mapped = mapHistoryMessagesToUiMessages(messages)
+
+    expect(mapped).toMatchObject([
+      {
+        id: 'user-with-attachment',
+        type: 'user_text',
+        content: '请看这个文件',
+        attachments: [{ type: 'file', name: 'report.md' }],
+      },
+    ])
+  })
+
   it('keeps parent tool linkage for live tool events', () => {
     // Initialize the session first
     useChatStore.setState({
@@ -224,7 +249,7 @@ describe('chatStore history mapping', () => {
           tokenUsage: { input_tokens: 0, output_tokens: 0 },
           elapsedSeconds: 0,
           statusVerb: '',
-          slashCommands: [],
+          slashCommands: [{ name: 'old-command', description: 'Old command' }],
           agentTaskNotifications: {},
           elapsedTimer: null,
         },
@@ -479,6 +504,83 @@ describe('chatStore history mapping', () => {
       summary: 'Agent "修复异常处理" completed',
       outputFile: '/tmp/agent-output.txt',
     })
+  })
+
+  it('clears local desktop chat state when the server confirms /clear', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: {
+          messages: [
+            { id: 'u1', type: 'user_text', content: '/clear', timestamp: Date.now() },
+            { id: 'a1', type: 'assistant_text', content: 'old context', timestamp: Date.now() },
+          ],
+          chatState: 'thinking',
+          connectionState: 'connected',
+          streamingText: 'pending',
+          streamingToolInput: 'tool',
+          activeToolUseId: 'tool-1',
+          activeToolName: 'Read',
+          activeThinkingId: 'thinking-1',
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 12, output_tokens: 34 },
+          elapsedSeconds: 5,
+          statusVerb: 'Thinking',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'system_notification',
+      subtype: 'session_cleared',
+      message: 'Conversation cleared',
+    })
+
+    const session = useChatStore.getState().sessions[TEST_SESSION_ID]
+    expect(session?.messages).toEqual([])
+    expect(session?.streamingText).toBe('')
+    expect(session?.chatState).toBe('idle')
+    expect(session?.tokenUsage).toEqual({ input_tokens: 0, output_tokens: 0 })
+    expect(session?.slashCommands).toEqual([])
+    expect(clearTasksMock).toHaveBeenCalled()
+  })
+
+  it('renders compact boundary notifications as system messages', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'system_notification',
+      subtype: 'compact_boundary',
+      message: 'Context compacted',
+    })
+
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.messages).toMatchObject([
+      { type: 'system', content: 'Context compacted' },
+    ])
   })
 
   it('flushes the previous assistant draft before starting a new user turn', () => {

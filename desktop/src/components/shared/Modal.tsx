@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 type ModalProps = {
   open: boolean
@@ -21,7 +22,7 @@ export function Modal({ open, onClose, title, children, width = 560, footer }: M
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
@@ -35,6 +36,7 @@ export function Modal({ open, onClose, title, children, width = 560, footer }: M
         style={{ width, maxWidth: 'calc(100vw - 48px)' }}
         role="dialog"
         aria-modal="true"
+        aria-label={title}
       >
         {title && (
           <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-0">
@@ -60,6 +62,7 @@ export function Modal({ open, onClose, title, children, width = 560, footer }: M
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

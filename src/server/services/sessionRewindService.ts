@@ -25,8 +25,15 @@ type RewindCodePreview = {
   deletions: number
 }
 
+export type RewindTargetSelector = {
+  targetUserMessageId?: string
+  userMessageIndex?: number
+  expectedContent?: string
+}
+
 export type SessionRewindPreview = {
   target: {
+    targetUserMessageId: string
     userMessageIndex: number
     userMessageCount: number
   }
@@ -55,9 +62,43 @@ function normalizeDiffStats(diffStats: {
   }
 }
 
+function normalizePromptText(text: string): string {
+  return text.replace(/\r\n/g, '\n').trim()
+}
+
+function extractUserPromptText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+
+  return content
+    .flatMap((block) => {
+      if (!block || typeof block !== 'object') return []
+      const record = block as Record<string, unknown>
+      return record.type === 'text' && typeof record.text === 'string'
+        ? [record.text]
+        : []
+    })
+    .join('\n')
+}
+
+function assertExpectedPromptMatches(
+  targetMessage: { content: unknown },
+  expectedContent: string | undefined,
+): void {
+  if (expectedContent === undefined) return
+
+  const actual = normalizePromptText(extractUserPromptText(targetMessage.content))
+  const expected = normalizePromptText(expectedContent)
+  if (actual !== expected) {
+    throw ApiError.badRequest(
+      'The resolved rewind target does not match the selected prompt. Refresh the session and try again.',
+    )
+  }
+}
+
 async function resolveRewindTarget(
   sessionId: string,
-  userMessageIndex: number,
+  selector: RewindTargetSelector,
 ): Promise<RewindTarget> {
   const activeMessages = await sessionService.getSessionMessages(sessionId)
   const userMessages = activeMessages.filter((message) => message.type === 'user')
@@ -66,20 +107,42 @@ async function resolveRewindTarget(
     throw ApiError.badRequest('This session has no user messages to rewind.')
   }
 
+  let targetUserMessage = null as (typeof userMessages)[number] | null
+  let userMessageIndex = -1
+
+  if (selector.targetUserMessageId) {
+    const activeMessage = activeMessages.find(
+      (message) => message.id === selector.targetUserMessageId,
+    )
+    if (activeMessage) {
+      if (activeMessage.type !== 'user') {
+        throw ApiError.badRequest('The selected rewind target is not a user message.')
+      }
+      targetUserMessage = activeMessage
+      userMessageIndex = userMessages.findIndex(
+        (message) => message.id === activeMessage.id,
+      )
+    }
+  }
+
+  if (!targetUserMessage && Number.isInteger(selector.userMessageIndex)) {
+    userMessageIndex = selector.userMessageIndex!
+    if (userMessageIndex >= 0 && userMessageIndex < userMessages.length) {
+      targetUserMessage = userMessages[userMessageIndex]!
+    }
+  }
+
   if (
-    !Number.isInteger(userMessageIndex) ||
+    !targetUserMessage ||
     userMessageIndex < 0 ||
     userMessageIndex >= userMessages.length
   ) {
     throw ApiError.badRequest(
-      `Invalid userMessageIndex ${userMessageIndex}. Expected 0-${userMessages.length - 1}.`,
+      `Invalid rewind target. Expected targetUserMessageId or userMessageIndex 0-${userMessages.length - 1}.`,
     )
   }
 
-  const targetUserMessage = userMessages[userMessageIndex]
-  if (!targetUserMessage) {
-    throw ApiError.badRequest('The selected user message could not be resolved.')
-  }
+  assertExpectedPromptMatches(targetUserMessage, selector.expectedContent)
 
   const activeMessageIndex = activeMessages.findIndex(
     (message) => message.id === targetUserMessage.id,
@@ -293,9 +356,9 @@ async function buildCodePreview(
 
 export async function previewSessionRewind(
   sessionId: string,
-  userMessageIndex: number,
+  selector: RewindTargetSelector,
 ): Promise<SessionRewindPreview> {
-  const target = await resolveRewindTarget(sessionId, userMessageIndex)
+  const target = await resolveRewindTarget(sessionId, selector)
   const workDir =
     (conversationService.hasSession(sessionId)
       ? conversationService.getSessionWorkDir(sessionId)
@@ -310,6 +373,7 @@ export async function previewSessionRewind(
 
   return {
     target: {
+      targetUserMessageId: target.targetUserMessageId,
       userMessageIndex: target.userMessageIndex,
       userMessageCount: target.userMessageCount,
     },
@@ -322,9 +386,9 @@ export async function previewSessionRewind(
 
 export async function executeSessionRewind(
   sessionId: string,
-  userMessageIndex: number,
+  selector: RewindTargetSelector,
 ): Promise<SessionRewindExecuteResult> {
-  const target = await resolveRewindTarget(sessionId, userMessageIndex)
+  const target = await resolveRewindTarget(sessionId, selector)
   const workDir =
     (conversationService.hasSession(sessionId)
       ? conversationService.getSessionWorkDir(sessionId)
@@ -381,6 +445,7 @@ export async function executeSessionRewind(
 
   return {
     target: {
+      targetUserMessageId: target.targetUserMessageId,
       userMessageIndex: target.userMessageIndex,
       userMessageCount: target.userMessageCount,
     },

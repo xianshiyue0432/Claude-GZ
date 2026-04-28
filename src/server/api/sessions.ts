@@ -13,6 +13,7 @@
  */
 
 import { sessionService } from '../services/sessionService.js'
+import { conversationService } from '../services/conversationService.js'
 import { ApiError, errorResponse } from '../middleware/errorHandler.js'
 import { getSlashCommands } from '../ws/handler.js'
 import { getCommandName } from '../../commands.js'
@@ -20,6 +21,7 @@ import { getSkillDirCommands } from '../../skills/loadSkillsDir.js'
 import {
   executeSessionRewind,
   previewSessionRewind,
+  type RewindTargetSelector,
 } from '../services/sessionRewindService.js'
 
 export async function handleSessionsApi(
@@ -95,6 +97,16 @@ export async function handleSessionsApi(
         )
       }
       return await getSessionSlashCommands(sessionId)
+    }
+
+    if (subResource === 'inspection') {
+      if (req.method !== 'GET') {
+        return Response.json(
+          { error: 'METHOD_NOT_ALLOWED', message: `Method ${req.method} not allowed` },
+          { status: 405 }
+        )
+      }
+      return await getSessionInspection(sessionId)
     }
 
     // Route to conversations handler if sub-resource is 'chat'
@@ -205,6 +217,123 @@ async function getSessionSlashCommands(sessionId: string): Promise<Response> {
   return Response.json({ commands: slashCommands })
 }
 
+async function getSessionInspection(sessionId: string): Promise<Response> {
+  const workDir =
+    conversationService.getSessionWorkDir(sessionId) ||
+    await sessionService.getSessionWorkDir(sessionId)
+
+  if (!workDir) {
+    throw ApiError.notFound(`Session not found: ${sessionId}`)
+  }
+
+  const active = conversationService.hasSession(sessionId)
+  const initMessage = conversationService.getSessionInitMessage(sessionId) ??
+    [...conversationService.getRecentSdkMessages(sessionId)]
+    .reverse()
+    .find((message) => message?.type === 'system' && message.subtype === 'init')
+  const transcriptMetadata = await sessionService.getTranscriptMetadata(sessionId)
+  const cachedSlashCommands = getSlashCommands(sessionId)
+  const fallbackSlashCommands = cachedSlashCommands.length > 0
+    ? cachedSlashCommands
+    : (await getSkillDirCommands(workDir))
+      .filter((command) => command.userInvocable !== false)
+      .map((command) => ({
+        name: getCommandName(command),
+        description: command.description || '',
+      }))
+  const slashCommandCount = Array.isArray(initMessage?.slash_commands)
+    ? initMessage.slash_commands.length
+    : fallbackSlashCommands.length
+
+  const response: Record<string, unknown> = {
+    active,
+    status: {
+      sessionId,
+      workDir,
+      permissionMode: conversationService.getSessionPermissionMode(sessionId),
+      version: typeof initMessage?.claude_code_version === 'string' ? initMessage.claude_code_version : transcriptMetadata?.version,
+      cwd: typeof initMessage?.cwd === 'string' ? initMessage.cwd : transcriptMetadata?.cwd ?? workDir,
+      model: typeof initMessage?.model === 'string' ? initMessage.model : transcriptMetadata?.model,
+      apiKeySource: typeof initMessage?.apiKeySource === 'string' ? initMessage.apiKeySource : undefined,
+      outputStyle: typeof initMessage?.output_style === 'string' ? initMessage.output_style : undefined,
+      tools: Array.isArray(initMessage?.tools) ? initMessage.tools : [],
+      mcpServers: Array.isArray(initMessage?.mcp_servers) ? initMessage.mcp_servers : [],
+      slashCommandCount,
+      skillCount: Array.isArray(initMessage?.skills) ? initMessage.skills.length : 0,
+    },
+    errors: {},
+  }
+  const transcriptUsage = await sessionService.getTranscriptUsage(sessionId)
+
+  if (!active) {
+    if (transcriptUsage) {
+      response.usage = transcriptUsage
+    }
+    response.errors = {
+      ...(transcriptUsage ? {} : { usage: 'CLI session is not running' }),
+      context: 'CLI session is not running',
+    }
+    return Response.json(response)
+  }
+
+  const [usageResult, contextResult, mcpResult] = await Promise.allSettled([
+    conversationService.requestControl(sessionId, { subtype: 'get_session_usage' }),
+    conversationService.requestControl(sessionId, { subtype: 'get_context_usage' }, 20_000),
+    conversationService.requestControl(sessionId, { subtype: 'mcp_status' }),
+  ])
+
+  const errors: Record<string, string> = {}
+  if (usageResult.status === 'fulfilled') {
+    response.usage = chooseRicherUsage(
+      { ...usageResult.value, source: 'current_process' },
+      transcriptUsage,
+    )
+  } else {
+    if (transcriptUsage) {
+      response.usage = transcriptUsage
+    } else {
+      errors.usage = usageResult.reason instanceof Error ? usageResult.reason.message : String(usageResult.reason)
+    }
+  }
+
+  if (contextResult.status === 'fulfilled') {
+    response.context = contextResult.value
+  } else {
+    errors.context = contextResult.reason instanceof Error ? contextResult.reason.message : String(contextResult.reason)
+  }
+
+  if (mcpResult.status === 'fulfilled' && response.status && typeof response.status === 'object') {
+    response.status = {
+      ...response.status,
+      mcpServers: Array.isArray(mcpResult.value.mcpServers) ? mcpResult.value.mcpServers : (response.status as Record<string, unknown>).mcpServers,
+    }
+  }
+
+  response.errors = errors
+  return Response.json(response)
+}
+
+function usageTokenTotal(usage: unknown): number {
+  if (!usage || typeof usage !== 'object') return 0
+  const record = usage as Record<string, unknown>
+  return [
+    record.totalInputTokens,
+    record.totalOutputTokens,
+    record.totalCacheReadInputTokens,
+    record.totalCacheCreationInputTokens,
+  ].reduce((sum, value) => sum + (typeof value === 'number' ? value : 0), 0)
+}
+
+function chooseRicherUsage(
+  currentUsage: Record<string, unknown>,
+  transcriptUsage: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (!transcriptUsage) return currentUsage
+  return usageTokenTotal(transcriptUsage) > usageTokenTotal(currentUsage)
+    ? transcriptUsage
+    : currentUsage
+}
+
 async function getGitInfo(sessionId: string): Promise<Response> {
   const workDir = await sessionService.getSessionWorkDir(sessionId)
   if (!workDir) {
@@ -267,20 +396,23 @@ async function getGitInfo(sessionId: string): Promise<Response> {
 }
 
 async function rewindSession(req: Request, sessionId: string): Promise<Response> {
-  let body: { userMessageIndex?: number; dryRun?: boolean }
+  let body: RewindTargetSelector & { dryRun?: boolean }
   try {
-    body = (await req.json()) as { userMessageIndex?: number; dryRun?: boolean }
+    body = (await req.json()) as RewindTargetSelector & { dryRun?: boolean }
   } catch {
     throw ApiError.badRequest('Invalid JSON body')
   }
 
-  if (!Number.isInteger(body.userMessageIndex)) {
-    throw ApiError.badRequest('userMessageIndex (integer) is required')
+  if (
+    (typeof body.targetUserMessageId !== 'string' || body.targetUserMessageId.length === 0) &&
+    !Number.isInteger(body.userMessageIndex)
+  ) {
+    throw ApiError.badRequest('targetUserMessageId (string) or userMessageIndex (integer) is required')
   }
 
   const result = body.dryRun
-    ? await previewSessionRewind(sessionId, body.userMessageIndex)
-    : await executeSessionRewind(sessionId, body.userMessageIndex)
+    ? await previewSessionRewind(sessionId, body)
+    : await executeSessionRewind(sessionId, body)
 
   return Response.json(result)
 }

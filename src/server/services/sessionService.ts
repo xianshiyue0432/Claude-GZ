@@ -11,6 +11,9 @@ import * as os from 'node:os'
 import { ApiError } from '../middleware/errorHandler.js'
 import { sanitizePath as sanitizePortablePath } from '../../utils/sessionStoragePortable.js'
 import type { FileHistorySnapshot } from '../../utils/fileHistory.js'
+import { calculateUSDCost, MODEL_COSTS } from '../../utils/modelCost.js'
+import { getContextWindowForModel, getModelMaxOutputTokens } from '../../utils/context.js'
+import { getCanonicalName } from '../../utils/model/model.js'
 
 // ============================================================================
 // Types
@@ -55,6 +58,41 @@ export type MessageEntry = {
   isSidechain?: boolean
 }
 
+export type TranscriptUsageSnapshot = {
+  source: 'transcript'
+  totalCostUSD: number
+  costDisplay: string
+  hasUnknownModelCost: boolean
+  totalAPIDuration: number
+  totalDuration: number
+  totalLinesAdded: number
+  totalLinesRemoved: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheReadInputTokens: number
+  totalCacheCreationInputTokens: number
+  totalWebSearchRequests: number
+  models: Array<{
+    model: string
+    displayName: string
+    inputTokens: number
+    outputTokens: number
+    cacheReadInputTokens: number
+    cacheCreationInputTokens: number
+    webSearchRequests: number
+    costUSD: number
+    costDisplay: string
+    contextWindow: number
+    maxOutputTokens: number
+  }>
+}
+
+export type TranscriptMetadataSnapshot = {
+  model?: string
+  cwd?: string
+  version?: string
+}
+
 /** Raw entry parsed from a single JSONL line */
 type RawEntry = {
   type?: string
@@ -71,8 +109,19 @@ type RawEntry = {
     model?: string
     id?: string
     type?: string
+    usage?: {
+      input_tokens?: number
+      output_tokens?: number
+      cache_read_input_tokens?: number
+      cache_creation_input_tokens?: number
+      server_tool_use?: {
+        web_search_requests?: number
+      }
+      speed?: string
+    }
   }
   timestamp?: string
+  version?: string
   snapshot?: {
     messageId?: string
     trackedFileBackups?: Record<string, unknown>
@@ -82,6 +131,8 @@ type RawEntry = {
   title?: string
   [key: string]: unknown
 }
+
+type ContentBlock = Record<string, unknown>
 
 const USER_INTERRUPTION_TEXTS = new Set([
   '[Request interrupted by user]',
@@ -301,6 +352,145 @@ export class SessionService {
     return undefined
   }
 
+  private extractAgentToolUseIdsFromMessage(message: MessageEntry): string[] {
+    if (message.type !== 'tool_use' || !Array.isArray(message.content)) {
+      return []
+    }
+
+    return (message.content as ContentBlock[])
+      .filter((block) => block.type === 'tool_use' && block.name === 'Agent')
+      .flatMap((block) => (typeof block.id === 'string' ? [block.id] : []))
+  }
+
+  private extractTextFromContent(content: unknown): string {
+    if (typeof content === 'string') return content
+    if (!Array.isArray(content)) return ''
+
+    return (content as ContentBlock[])
+      .flatMap((block) => (typeof block.text === 'string' ? [block.text] : []))
+      .join('\n')
+  }
+
+  private extractAgentIdFromResultText(text: string): string | undefined {
+    const match = text.match(/(?:^|\n)\s*agentId:\s*([A-Za-z0-9_-]+)/)
+    return match?.[1]
+  }
+
+  private extractAgentResultLinks(messages: MessageEntry[]): Map<string, string> {
+    const agentToolUseIds = new Set(
+      messages.flatMap((message) => this.extractAgentToolUseIdsFromMessage(message)),
+    )
+    const resultLinks = new Map<string, string>()
+
+    for (const message of messages) {
+      if (message.type !== 'tool_result' || !Array.isArray(message.content)) {
+        continue
+      }
+
+      for (const block of message.content as ContentBlock[]) {
+        if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') {
+          continue
+        }
+        if (!agentToolUseIds.has(block.tool_use_id)) {
+          continue
+        }
+
+        const agentId = this.extractAgentIdFromResultText(
+          this.extractTextFromContent(block.content),
+        )
+        if (agentId) {
+          resultLinks.set(block.tool_use_id, agentId)
+        }
+      }
+    }
+
+    return resultLinks
+  }
+
+  private namespaceSubagentContentIds(content: unknown, namespace: string): unknown {
+    if (!Array.isArray(content)) return content
+
+    return (content as ContentBlock[]).map((block) => {
+      if (!block || typeof block !== 'object') return block
+      if (block.type === 'tool_use' && typeof block.id === 'string') {
+        return { ...block, id: `${namespace}/${block.id}` }
+      }
+      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+        return { ...block, tool_use_id: `${namespace}/${block.tool_use_id}` }
+      }
+      return block
+    })
+  }
+
+  private subagentTranscriptPath(
+    projectDir: string,
+    sessionId: string,
+    agentId: string,
+  ): string {
+    const normalizedAgentId = agentId.startsWith('agent-') ? agentId : `agent-${agentId}`
+    return path.join(
+      this.getProjectsDir(),
+      projectDir,
+      sessionId,
+      'subagents',
+      `${normalizedAgentId}.jsonl`,
+    )
+  }
+
+  private async loadSubagentToolMessages(
+    projectDir: string,
+    sessionId: string,
+    parentToolUseId: string,
+    agentId: string,
+  ): Promise<MessageEntry[]> {
+    const filePath = this.subagentTranscriptPath(projectDir, sessionId, agentId)
+    const entries = await this.readJsonlFile(filePath)
+    const namespace = `${parentToolUseId}/${agentId}`
+    const messages: MessageEntry[] = []
+
+    for (const entry of entries) {
+      if (!entry.message?.role || entry.isMeta) continue
+      if (this.shouldHideTranscriptEntry(entry)) continue
+      if (entry.type !== 'user' && entry.type !== 'assistant' && entry.type !== 'system') {
+        continue
+      }
+
+      const message = this.entryToMessage(
+        {
+          ...entry,
+          message: {
+            ...entry.message,
+            content: this.namespaceSubagentContentIds(entry.message.content, namespace),
+          },
+        },
+        parentToolUseId,
+      )
+      if (message && (message.type === 'tool_use' || message.type === 'tool_result')) {
+        messages.push(message)
+      }
+    }
+
+    return messages
+  }
+
+  private async appendSubagentToolMessages(
+    projectDir: string,
+    sessionId: string,
+    messages: MessageEntry[],
+  ): Promise<MessageEntry[]> {
+    const resultLinks = this.extractAgentResultLinks(messages)
+    if (resultLinks.size === 0) {
+      return messages
+    }
+
+    const childMessages = await Promise.all(
+      [...resultLinks.entries()].map(([parentToolUseId, agentId]) =>
+        this.loadSubagentToolMessages(projectDir, sessionId, parentToolUseId, agentId),
+      ),
+    )
+    return [...messages, ...childMessages.flat()]
+  }
+
   private resolveParentToolUseId(
     entry: RawEntry,
     entriesByUuid: Map<string, RawEntry>,
@@ -510,6 +700,153 @@ export class SessionService {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
   }
 
+  private formatCost(cost: number): string {
+    return `$${cost > 0.5 ? (Math.round(cost * 100) / 100).toFixed(2) : cost.toFixed(4)}`
+  }
+
+  async getTranscriptMetadata(sessionId: string): Promise<TranscriptMetadataSnapshot | null> {
+    const found = await this.findSessionFile(sessionId)
+    if (!found) return null
+
+    const entries = await this.readJsonlFile(found.filePath)
+    const metadata: TranscriptMetadataSnapshot = {}
+
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i]!
+      if (!metadata.model && typeof entry.message?.model === 'string') {
+        metadata.model = entry.message.model
+      }
+      if (!metadata.cwd && typeof entry.cwd === 'string') {
+        metadata.cwd = entry.cwd
+      }
+      if (!metadata.version && typeof entry.version === 'string') {
+        metadata.version = entry.version
+      }
+      if (metadata.model && metadata.cwd && metadata.version) break
+    }
+
+    return metadata
+  }
+
+  async getTranscriptUsage(sessionId: string): Promise<TranscriptUsageSnapshot | null> {
+    const found = await this.findSessionFile(sessionId)
+    if (!found) return null
+
+    const entries = await this.readJsonlFile(found.filePath)
+    const models = new Map<string, TranscriptUsageSnapshot['models'][number]>()
+    let totalCostUSD = 0
+    let totalInputTokens = 0
+    let totalOutputTokens = 0
+    let totalCacheReadInputTokens = 0
+    let totalCacheCreationInputTokens = 0
+    let totalWebSearchRequests = 0
+    let hasUnknownModelCost = false
+    let firstUsageAt: number | null = null
+    let lastUsageAt: number | null = null
+
+    for (const entry of entries) {
+      const usage = entry.message?.usage
+      const model = entry.message?.model
+      if (!usage || typeof model !== 'string') continue
+
+      const inputTokens = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0
+      const outputTokens = typeof usage.output_tokens === 'number' ? usage.output_tokens : 0
+      const cacheReadInputTokens = typeof usage.cache_read_input_tokens === 'number' ? usage.cache_read_input_tokens : 0
+      const cacheCreationInputTokens = typeof usage.cache_creation_input_tokens === 'number' ? usage.cache_creation_input_tokens : 0
+      const webSearchRequests = typeof usage.server_tool_use?.web_search_requests === 'number'
+        ? usage.server_tool_use.web_search_requests
+        : 0
+
+      if (
+        inputTokens === 0 &&
+        outputTokens === 0 &&
+        cacheReadInputTokens === 0 &&
+        cacheCreationInputTokens === 0 &&
+        webSearchRequests === 0
+      ) {
+        continue
+      }
+
+      const canonical = getCanonicalName(model)
+      if (!Object.prototype.hasOwnProperty.call(MODEL_COSTS, canonical)) {
+        hasUnknownModelCost = true
+      }
+
+      const costUsage = {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cache_read_input_tokens: cacheReadInputTokens,
+        cache_creation_input_tokens: cacheCreationInputTokens,
+        server_tool_use: { web_search_requests: webSearchRequests },
+        speed: usage.speed,
+      } as Parameters<typeof calculateUSDCost>[1]
+      const costUSD = calculateUSDCost(model, costUsage)
+
+      let modelUsage = models.get(model)
+      if (!modelUsage) {
+        modelUsage = {
+          model,
+          displayName: canonical,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          webSearchRequests: 0,
+          costUSD: 0,
+          costDisplay: '$0.0000',
+          contextWindow: getContextWindowForModel(model),
+          maxOutputTokens: getModelMaxOutputTokens(model).default,
+        }
+        models.set(model, modelUsage)
+      }
+
+      modelUsage.inputTokens += inputTokens
+      modelUsage.outputTokens += outputTokens
+      modelUsage.cacheReadInputTokens += cacheReadInputTokens
+      modelUsage.cacheCreationInputTokens += cacheCreationInputTokens
+      modelUsage.webSearchRequests += webSearchRequests
+      modelUsage.costUSD += costUSD
+      modelUsage.costDisplay = this.formatCost(modelUsage.costUSD)
+
+      totalCostUSD += costUSD
+      totalInputTokens += inputTokens
+      totalOutputTokens += outputTokens
+      totalCacheReadInputTokens += cacheReadInputTokens
+      totalCacheCreationInputTokens += cacheCreationInputTokens
+      totalWebSearchRequests += webSearchRequests
+
+      if (entry.timestamp) {
+        const time = Date.parse(entry.timestamp)
+        if (!Number.isNaN(time)) {
+          firstUsageAt = firstUsageAt === null ? time : Math.min(firstUsageAt, time)
+          lastUsageAt = lastUsageAt === null ? time : Math.max(lastUsageAt, time)
+        }
+      }
+    }
+
+    if (models.size === 0) return null
+
+    return {
+      source: 'transcript',
+      totalCostUSD,
+      costDisplay: this.formatCost(totalCostUSD),
+      hasUnknownModelCost,
+      totalAPIDuration: 0,
+      totalDuration:
+        firstUsageAt !== null && lastUsageAt !== null
+          ? Math.max(0, Math.round((lastUsageAt - firstUsageAt) / 1000))
+          : 0,
+      totalLinesAdded: 0,
+      totalLinesRemoved: 0,
+      totalInputTokens,
+      totalOutputTokens,
+      totalCacheReadInputTokens,
+      totalCacheCreationInputTokens,
+      totalWebSearchRequests,
+      models: Array.from(models.values()),
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Public API
   // --------------------------------------------------------------------------
@@ -587,7 +924,11 @@ export class SessionService {
     const stat = await fs.stat(filePath)
     const entries = await this.readJsonlFile(filePath)
 
-    const messages = this.entriesToMessages(entries)
+    const messages = await this.appendSubagentToolMessages(
+      projectDir,
+      sessionId,
+      this.entriesToMessages(entries),
+    )
     const title = this.extractTitle(entries)
     const workDir = this.resolveWorkDirFromEntries(entries, projectDir)
     const workDirExists = await this.pathExists(workDir)
@@ -623,7 +964,11 @@ export class SessionService {
     }
 
     const entries = await this.readJsonlFile(found.filePath)
-    return this.entriesToMessages(entries)
+    return await this.appendSubagentToolMessages(
+      found.projectDir,
+      sessionId,
+      this.entriesToMessages(entries),
+    )
   }
 
   /**
@@ -787,6 +1132,50 @@ export class SessionService {
     const found = await this.findSessionFile(sessionId)
     if (!found) return
     await fs.unlink(found.filePath)
+  }
+
+  async clearSessionTranscript(sessionId: string, fallbackWorkDir?: string): Promise<void> {
+    let found = await this.findSessionFile(sessionId)
+    if (!found && fallbackWorkDir) {
+      const absWorkDir = path.resolve(fallbackWorkDir)
+      const dirPath = path.join(this.getProjectsDir(), this.sanitizePath(absWorkDir))
+      await fs.mkdir(dirPath, { recursive: true })
+      found = {
+        filePath: path.join(dirPath, `${sessionId}.jsonl`),
+        projectDir: this.sanitizePath(absWorkDir),
+      }
+    }
+    if (!found) {
+      throw ApiError.notFound(`Session not found: ${sessionId}`)
+    }
+
+    const entries = await this.readJsonlFile(found.filePath)
+    const workDir = this.resolveWorkDirFromEntries(entries, found.projectDir) || fallbackWorkDir || process.cwd()
+    const now = new Date().toISOString()
+
+    const initialEntry = {
+      type: 'file-history-snapshot',
+      messageId: crypto.randomUUID(),
+      snapshot: {
+        messageId: crypto.randomUUID(),
+        trackedFileBackups: {},
+        timestamp: now,
+      },
+      isSnapshotUpdate: false,
+    }
+
+    const metaEntry = {
+      type: 'session-meta',
+      isMeta: true,
+      workDir,
+      timestamp: now,
+    }
+
+    await fs.writeFile(
+      found.filePath,
+      `${JSON.stringify(initialEntry)}\n${JSON.stringify(metaEntry)}\n`,
+      'utf-8',
+    )
   }
 
   async appendSessionMetadata(

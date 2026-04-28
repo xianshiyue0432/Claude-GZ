@@ -15,4 +15,8 @@ export type ProviderPreset = {
   defaultModels: ModelMapping
   needsApiKey: boolean
   websiteUrl: string
+  apiKeyUrl?: string
+  promoText?: string
+  featured?: boolean
+  defaultEnv?: Record<string, string>
 }

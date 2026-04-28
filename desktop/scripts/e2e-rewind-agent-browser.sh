@@ -108,6 +108,8 @@ AB="agent-browser --session ${SESSION_NAME}"
 
 ${AB} open "${WEB_URL}"
 ${AB} wait 2000
+${AB} eval "localStorage.setItem('cc-haha-locale', 'en'); location.reload();"
+${AB} wait 2000
 ${AB} screenshot "${ARTIFACT_DIR}/01-home.png" >/dev/null
 
 ${AB} fill '#sidebar-search' "${UNIQUE_TITLE}"

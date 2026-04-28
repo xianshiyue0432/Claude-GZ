@@ -77,7 +77,8 @@ export function TabBar() {
   const handleClose = (sessionId: string) => {
     // Special tabs can always be closed directly
     const tab = tabs.find((t) => t.sessionId === sessionId)
-    if (tab && tab.type !== 'session') {
+    if (!tab) return
+    if (tab.type !== 'session') {
       closeTab(sessionId)
       return
     }
@@ -101,39 +102,38 @@ export function TabBar() {
 
   const handleCloseOthers = (sessionId: string) => {
     setContextMenu(null)
-    const otherIds = tabs.filter((t) => t.sessionId !== sessionId).map((t) => t.sessionId)
-    for (const id of otherIds) {
-      disconnectSession(id)
-      closeTab(id)
+    const otherTabs = tabs.filter((t) => t.sessionId !== sessionId)
+    for (const tab of otherTabs) {
+      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      closeTab(tab.sessionId)
     }
   }
 
   const handleCloseLeft = (sessionId: string) => {
     setContextMenu(null)
     const idx = tabs.findIndex((t) => t.sessionId === sessionId)
-    const leftIds = tabs.slice(0, idx).map((t) => t.sessionId)
-    for (const id of leftIds) {
-      disconnectSession(id)
-      closeTab(id)
+    const leftTabs = tabs.slice(0, idx)
+    for (const tab of leftTabs) {
+      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      closeTab(tab.sessionId)
     }
   }
 
   const handleCloseRight = (sessionId: string) => {
     setContextMenu(null)
     const idx = tabs.findIndex((t) => t.sessionId === sessionId)
-    const rightIds = tabs.slice(idx + 1).map((t) => t.sessionId)
-    for (const id of rightIds) {
-      disconnectSession(id)
-      closeTab(id)
+    const rightTabs = tabs.slice(idx + 1)
+    for (const tab of rightTabs) {
+      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      closeTab(tab.sessionId)
     }
   }
 
   const handleCloseAll = () => {
     setContextMenu(null)
-    const allIds = tabs.map((t) => t.sessionId)
-    for (const id of allIds) {
-      disconnectSession(id)
-      closeTab(id)
+    for (const tab of tabs) {
+      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      closeTab(tab.sessionId)
     }
   }
 
@@ -401,6 +401,9 @@ const TabItem = forwardRef<HTMLDivElement, {
       )}
       {tab.type === 'scheduled' && (
         <span className="material-symbols-outlined text-[14px] flex-shrink-0 text-[var(--color-text-tertiary)]">schedule</span>
+      )}
+      {tab.type === 'terminal' && (
+        <span className="material-symbols-outlined text-[14px] flex-shrink-0 text-[var(--color-text-tertiary)]">terminal</span>
       )}
 
       <span className={`flex-1 truncate text-xs ${isActive ? 'text-[var(--color-text-primary)] font-medium' : 'text-[var(--color-text-secondary)]'}`}>

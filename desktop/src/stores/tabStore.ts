@@ -5,8 +5,9 @@ const TAB_STORAGE_KEY = 'cc-haha-open-tabs'
 
 export const SETTINGS_TAB_ID = '__settings__'
 export const SCHEDULED_TAB_ID = '__scheduled__'
+export const TERMINAL_TAB_PREFIX = '__terminal__'
 
-export type TabType = 'session' | 'settings' | 'scheduled'
+export type TabType = 'session' | 'settings' | 'scheduled' | 'terminal'
 
 export type Tab = {
   sessionId: string
@@ -25,6 +26,7 @@ type TabStore = {
   activeTabId: string | null
 
   openTab: (sessionId: string, title: string, type?: TabType) => void
+  openTerminalTab: () => string
   closeTab: (sessionId: string) => void
   setActiveTab: (sessionId: string) => void
   updateTabTitle: (sessionId: string, title: string) => void
@@ -52,6 +54,22 @@ export const useTabStore = create<TabStore>((set, get) => ({
       })
     }
     get().saveTabs()
+  },
+
+  openTerminalTab: () => {
+    const { tabs } = get()
+    const nextIndex = Math.max(
+      0,
+      ...tabs
+        .filter((tab) => tab.type === 'terminal')
+        .map((tab) => {
+          const match = /^Terminal (\d+)$/.exec(tab.title)
+          return match ? Number(match[1]) : 0
+        }),
+    ) + 1
+    const sessionId = `${TERMINAL_TAB_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    get().openTab(sessionId, `Terminal ${nextIndex}`, 'terminal')
+    return sessionId
   },
 
   closeTab: (sessionId) => {
@@ -118,9 +136,12 @@ export const useTabStore = create<TabStore>((set, get) => ({
 
   saveTabs: () => {
     const { tabs, activeTabId } = get()
+    const persistableTabs = tabs.filter((tab) => tab.type !== 'terminal')
     const data: TabPersistence = {
-      openTabs: tabs.map((t) => ({ sessionId: t.sessionId, title: t.title, type: t.type })),
-      activeTabId,
+      openTabs: persistableTabs.map((t) => ({ sessionId: t.sessionId, title: t.title, type: t.type })),
+      activeTabId: activeTabId && persistableTabs.some((tab) => tab.sessionId === activeTabId)
+        ? activeTabId
+        : (persistableTabs[0]?.sessionId ?? null),
     }
     try {
       localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(data))
@@ -142,6 +163,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
         .filter((t) => {
           // Special tabs are always valid
           if (t.type === 'settings' || t.type === 'scheduled') return true
+          if (t.type === 'terminal') return false
           // Session tabs must exist on server
           return existingIds.has(t.sessionId)
         })

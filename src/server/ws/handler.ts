@@ -18,6 +18,11 @@ import { sessionService } from '../services/sessionService.js'
 import { SettingsService } from '../services/settingsService.js'
 import { ProviderService } from '../services/providerService.js'
 import { deriveTitle, generateTitle, saveAiTitle } from '../services/titleService.js'
+import { parseSlashCommand } from '../../utils/slashCommandParsing.js'
+import {
+  LOCAL_COMMAND_STDERR_TAG,
+  LOCAL_COMMAND_STDOUT_TAG,
+} from '../../constants/xml.js'
 
 const settingsService = new SettingsService()
 const providerService = new ProviderService()
@@ -214,6 +219,22 @@ async function handleUserMessage(
   sessionStopRequested.delete(sessionId)
   clearPrewarmState(sessionId)
 
+  const desktopSlashCommand = getDesktopSlashCommand(message.content)
+  if (desktopSlashCommand?.commandName === 'clear' && desktopSlashCommand.args.trim()) {
+    sendMessage(ws, {
+      type: 'error',
+      message: 'The /clear command does not accept arguments.',
+      code: 'INVALID_SLASH_COMMAND_ARGS',
+    })
+    sendMessage(ws, { type: 'status', state: 'idle' })
+    return
+  }
+
+  if (desktopSlashCommand?.commandName === 'clear') {
+    await handleDesktopClearCommand(ws)
+    return
+  }
+
   // Send thinking status
   sendMessage(ws, { type: 'status', state: 'thinking', verb: 'Thinking' })
 
@@ -290,6 +311,42 @@ async function handleUserMessage(
   }
 
   userMessageSent = true
+}
+
+async function handleDesktopClearCommand(
+  ws: ServerWebSocket<WebSocketData>,
+) {
+  const { sessionId } = ws.data
+
+  const workDir = conversationService.getSessionWorkDir(sessionId)
+  conversationService.stopSession(sessionId)
+  conversationService.clearOutputCallbacks(sessionId)
+  sessionSlashCommands.delete(sessionId)
+  sessionTitleState.delete(sessionId)
+  cleanupStreamState(sessionId)
+
+  try {
+    await sessionService.clearSessionTranscript(sessionId, workDir || undefined)
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    sendMessage(ws, {
+      type: 'error',
+      message: errMsg,
+      code: 'SESSION_CLEAR_FAILED',
+    })
+    sendMessage(ws, { type: 'status', state: 'idle' })
+    return
+  }
+
+  sendMessage(ws, {
+    type: 'system_notification',
+    subtype: 'session_cleared',
+    message: 'Conversation cleared',
+  })
+  sendMessage(ws, {
+    type: 'message_complete',
+    usage: { input_tokens: 0, output_tokens: 0 },
+  })
 }
 
 function handlePrewarmSession(ws: ServerWebSocket<WebSocketData>) {
@@ -403,6 +460,21 @@ async function handleSetRuntimeConfig(
   }
 
   if (!conversationService.hasSession(sessionId)) {
+    const pendingStartup = sessionStartupPromises.get(sessionId)
+    if (pendingStartup) {
+      await enqueueRuntimeTransition(sessionId, async () => {
+        await pendingStartup.catch(() => undefined)
+        const currentOverride = runtimeOverrides.get(sessionId)
+        if (
+          currentOverride?.providerId !== nextOverride.providerId ||
+          currentOverride.modelId !== nextOverride.modelId ||
+          !conversationService.hasSession(sessionId)
+        ) {
+          return
+        }
+        await restartSessionWithRuntimeConfig(ws, sessionId)
+      })
+    }
     return
   }
 
@@ -772,6 +844,14 @@ function translateCliMessage(cliMsg: any, sessionId: string): ServerMessage[] {
       // CLI 发送 type:'user' 消息，其中 content 包含 tool_result 块
       const messages: ServerMessage[] = []
 
+      const localCommandOutput = extractLocalCommandOutput(
+        cliMsg.message?.content,
+      )
+      if (localCommandOutput) {
+        messages.push({ type: 'content_start', blockType: 'text' })
+        messages.push({ type: 'content_delta', text: localCommandOutput })
+      }
+
       if (cliMsg.message?.content && Array.isArray(cliMsg.message.content)) {
         for (const block of cliMsg.message.content) {
           if (block.type === 'tool_result') {
@@ -991,6 +1071,17 @@ function translateCliMessage(cliMsg: any, sessionId: string): ServerMessage[] {
         // Hook 执行中 — 不转发给前端
         return []
       }
+      if (subtype === 'local_command' || subtype === 'local_command_output') {
+        const localCommandOutput = extractLocalCommandOutput(
+          cliMsg.content ?? cliMsg.message,
+          { allowUntagged: subtype === 'local_command_output' },
+        )
+        if (!localCommandOutput) return []
+        return [
+          { type: 'content_start', blockType: 'text' },
+          { type: 'content_delta', text: localCommandOutput },
+        ]
+      }
       // Bug #7: 处理 task/team system 消息
       if (subtype === 'task_notification') {
         return [{
@@ -1022,6 +1113,14 @@ function translateCliMessage(cliMsg: any, sessionId: string): ServerMessage[] {
           data: cliMsg,
         }]
       }
+      if (subtype === 'compact_boundary') {
+        return [{
+          type: 'system_notification',
+          subtype: 'compact_boundary',
+          message: getCompactBoundaryMessage(cliMsg),
+          data: cliMsg.compact_metadata ?? cliMsg,
+        }]
+      }
       // 其他 system 消息
       return []
     }
@@ -1043,6 +1142,59 @@ function sendMessage(ws: ServerWebSocket<WebSocketData>, message: ServerMessage)
 
 function sendError(ws: ServerWebSocket<WebSocketData>, message: string, code: string) {
   sendMessage(ws, { type: 'error', message, code })
+}
+
+function getDesktopSlashCommand(content: string): ReturnType<typeof parseSlashCommand> {
+  const parsed = parseSlashCommand(content.trim())
+  if (!parsed || parsed.isMcp) return null
+  return parsed
+}
+
+function extractLocalCommandOutput(
+  content: unknown,
+  options: { allowUntagged?: boolean } = {},
+): string | null {
+  const raw = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content
+        .flatMap((block) => {
+          if (!block || typeof block !== 'object') return []
+          const text = (block as { text?: unknown }).text
+          return typeof text === 'string' ? [text] : []
+        })
+        .join('\n')
+      : ''
+
+  if (!raw) return null
+
+  const stdout = extractTaggedContent(raw, LOCAL_COMMAND_STDOUT_TAG)
+  if (stdout !== null) return stdout
+
+  const stderr = extractTaggedContent(raw, LOCAL_COMMAND_STDERR_TAG)
+  if (stderr !== null) return stderr
+
+  if (options.allowUntagged) {
+    const normalized = raw.trim()
+    return normalized || null
+  }
+
+  return null
+}
+
+function extractTaggedContent(raw: string, tag: string): string | null {
+  const match = raw.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
+  return match?.[1]?.trim() ?? null
+}
+
+function getCompactBoundaryMessage(cliMsg: any): string {
+  const message = typeof cliMsg?.message === 'string' ? cliMsg.message.trim() : ''
+  if (message) return message
+
+  const content = typeof cliMsg?.content === 'string' ? cliMsg.content.trim() : ''
+  if (content) return content
+
+  return 'Context compacted'
 }
 
 function rebindSessionOutput(

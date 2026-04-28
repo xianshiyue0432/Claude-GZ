@@ -58,7 +58,6 @@ export function EmptySession() {
   const slashItemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const createSession = useSessionStore((state) => state.createSession)
   const sendMessage = useChatStore((state) => state.sendMessage)
-  const setSessionRuntime = useChatStore((state) => state.setSessionRuntime)
   const connectToSession = useChatStore((state) => state.connectToSession)
   const setActiveView = useUIStore((state) => state.setActiveView)
   const addToast = useUIStore((state) => state.addToast)
@@ -153,15 +152,20 @@ export function EmptySession() {
     }
   }, [workDir])
 
+  const allSlashCommands = useMemo(
+    () => mergeSlashCommands(slashCommands, FALLBACK_SLASH_COMMANDS),
+    [slashCommands],
+  )
+
   const filteredCommands = useMemo(() => {
-    const source = mergeSlashCommands(slashCommands, FALLBACK_SLASH_COMMANDS)
+    const source = allSlashCommands
     if (!slashFilter) return source
     const lower = slashFilter.toLowerCase()
     return source.filter((command) => (
       command.name.toLowerCase().includes(lower) ||
       command.description.toLowerCase().includes(lower)
     ))
-  }, [slashCommands, slashFilter])
+  }, [allSlashCommands, slashFilter])
 
   const exactSlashCommand = useMemo(() => {
     const normalized = slashFilter.trim().toLowerCase()
@@ -228,12 +232,11 @@ export function EmptySession() {
           modelId: settings.currentModel?.id ?? OFFICIAL_DEFAULT_MODEL_ID,
         }
       const sessionId = await createSession(workDir || undefined)
+      useSessionRuntimeStore.getState().setSelection(sessionId, draftSelection)
+      useSessionRuntimeStore.getState().clearSelection(DRAFT_RUNTIME_SELECTION_KEY)
       setActiveView('code')
       useTabStore.getState().openTab(sessionId, 'New Session')
       connectToSession(sessionId)
-      useSessionRuntimeStore.getState().setSelection(sessionId, draftSelection)
-      useSessionRuntimeStore.getState().clearSelection(DRAFT_RUNTIME_SELECTION_KEY)
-      setSessionRuntime(sessionId, draftSelection)
       const attachmentPayload: AttachmentRef[] = attachments.map((attachment) => ({
         type: attachment.type,
         name: attachment.name,
@@ -501,6 +504,7 @@ export function EmptySession() {
                 <LocalSlashCommandPanel
                   command={localSlashPanel}
                   cwd={workDir || undefined}
+                  commands={allSlashCommands}
                   onClose={() => setLocalSlashPanel(null)}
                 />
               </div>

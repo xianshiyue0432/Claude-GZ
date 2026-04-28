@@ -317,6 +317,31 @@ describe('ProviderService', () => {
       expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('model-opus')
     })
 
+    test('should include preset default env on activation and runtime env', async () => {
+      const svc = new ProviderService()
+      const provider = await svc.addProvider(sampleInput({
+        presetId: 'shengsuanyun',
+        baseUrl: 'https://router.shengsuanyun.com/api',
+      }))
+
+      await svc.activateProvider(provider.id)
+
+      const settings = await readSettings()
+      const env = settings.env as Record<string, string>
+      expect(env.API_TIMEOUT_MS).toBe('3000000')
+      expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
+
+      const runtimeEnv = await svc.getProviderRuntimeEnv(provider.id)
+      expect(runtimeEnv.API_TIMEOUT_MS).toBe('3000000')
+      expect(runtimeEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
+
+      await svc.activateOfficial()
+      const clearedSettings = await readSettings()
+      const clearedEnv = (clearedSettings.env as Record<string, string> | undefined) ?? {}
+      expect(clearedEnv.API_TIMEOUT_MS).toBeUndefined()
+      expect(clearedEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBeUndefined()
+    })
+
     test('should preserve existing settings.json fields on activation', async () => {
       // Pre-seed settings with an extra field
       await fs.mkdir(path.join(tmpDir, 'cc-haha'), { recursive: true })
@@ -412,9 +437,10 @@ describe('Providers API', () => {
     const res = await handleProvidersApi(req, url, segments)
 
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { providers: { name: string }[] }
+    const body = (await res.json()) as { providers: { name: string; apiKey: string }[] }
     expect(body.providers).toHaveLength(1)
     expect(body.providers[0].name).toBe('Test Provider')
+    expect(body.providers[0].apiKey).toBe('sk-test-key-123')
   })
 
   // ─── POST /api/providers ─────────────────────────────────────────────────

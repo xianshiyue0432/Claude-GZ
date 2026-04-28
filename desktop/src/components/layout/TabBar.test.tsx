@@ -333,4 +333,34 @@ describe('TabBar', () => {
     expect(useTabStore.getState().tabs.map((tab) => tab.sessionId)).toEqual(['tab-2'])
     expect(useTabStore.getState().activeTabId).toBe('tab-2')
   })
+
+  it('closes terminal tabs without disconnecting chat sessions', async () => {
+    const { TabBar } = await import('./TabBar')
+    const { useTabStore } = await import('../../stores/tabStore')
+    const { useChatStore } = await import('../../stores/chatStore')
+
+    const disconnectSession = vi.fn()
+
+    useTabStore.setState({
+      tabs: [
+        { sessionId: '__terminal__1', title: 'Terminal 1', type: 'terminal', status: 'idle' },
+      ],
+      activeTabId: '__terminal__1',
+    })
+    useChatStore.setState({
+      sessions: {},
+      disconnectSession,
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+
+    await act(async () => {
+      render(<TabBar />)
+    })
+
+    expect(screen.getByText('terminal')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Close Terminal 1'))
+
+    expect(disconnectSession).not.toHaveBeenCalled()
+    expect(useTabStore.getState().tabs).toEqual([])
+  })
 })

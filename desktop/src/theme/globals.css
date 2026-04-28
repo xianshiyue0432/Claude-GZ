@@ -173,6 +173,8 @@
   --color-surface-sidebar: var(--color-surface-container-low);
   --color-surface-hover: var(--color-surface-container-high);
   --color-surface-selected: var(--color-surface-container);
+  --color-model-option-selected-bg: var(--color-primary-fixed);
+  --color-model-option-selected-border: rgba(143, 72, 47, 0.2);
   --color-sidebar-filter-bg: transparent;
   --color-sidebar-filter-border: rgba(218, 193, 186, 0.92);
   --color-sidebar-filter-icon-bg: transparent;
@@ -317,6 +319,8 @@
   --color-surface-sidebar: #171615;
   --color-surface-hover: var(--color-surface-container-highest);
   --color-surface-selected: var(--color-surface-container);
+  --color-model-option-selected-bg: rgba(255, 181, 159, 0.13);
+  --color-model-option-selected-border: rgba(255, 181, 159, 0.34);
   --color-sidebar-filter-bg: rgba(255, 255, 255, 0.01);
   --color-sidebar-filter-border: rgba(255, 255, 255, 0.08);
   --color-sidebar-filter-icon-bg: transparent;

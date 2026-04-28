@@ -212,9 +212,37 @@ http://127.0.0.1:2024
 
 This project is maintained in the author's spare time. Corporate or individual sponsorships are welcome to support ongoing development. Custom features, integrations, and business partnerships are also open for discussion.
 
-| Sponsor | Description |
-|------|------|
-| <a href="https://legionproxy.io/?utm_source=github&utm_campaign=mediacrawler"><img src="docs/images/sponsors/legionproxy-logo.svg" width="180" alt="LegionProxy"></a> | [LegionProxy](https://legionproxy.io/?utm_source=github&utm_campaign=mediacrawler) provides residential proxies built for account registration and automation, with 74M+ real residential IPs, 195+ countries, HTTP/3 high-speed connections, starting at $0.60/GB. |
+<table>
+  <thead>
+    <tr>
+      <th width="220">Sponsor</th>
+      <th align="left">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center" valign="middle">
+        <a href="https://jiekou.ai/referral?invited_code=OBNU3K">
+          <img src="docs/images/sponsors/jiekou-logo.svg" width="72" alt="JieKou AI"><br>
+          <strong>接口AI</strong>
+        </a>
+      </td>
+      <td valign="middle">
+        Thanks to <a href="https://jiekou.ai/referral?invited_code=OBNU3K">JieKou AI</a> for sponsoring this project. JieKou AI provides official model resources with stable, high-performance API access. Subscription bundles are priced at 20% off the official rate; new users who register through <a href="https://jiekou.ai/referral?invited_code=OBNU3K">this link</a> and bind GitHub can claim a $3 coupon.
+      </td>
+    </tr>
+    <tr>
+      <td align="center" valign="middle">
+        <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">
+          <img src="docs/images/sponsors/shengsuanyun-logo.svg" width="180" alt="ShengSuanYun">
+        </a>
+      </td>
+      <td valign="middle">
+        Thanks to <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">ShengSuanYun</a> for sponsoring this project. ShengSuanYun is an industrial-grade AI task parallel execution platform for AI Native Teams, aggregating Claude, ChatGPT, Gemini, and other LLM, image, and video model capacity through direct, non-reverse-engineered access. Its platform SLA reaches 99.7%, with <a href="https://watch.shengsuanyun.com/status/shengsuanyun">service status</a> available online. It also supports dedicated enterprise gateways, cost and permission controls, smart routing, security protection, BYOK, usage-based billing, upcoming tokens plans, and invoicing. New users registering through <a href="https://www.shengsuanyun.com/?from=CH_LEJ88KWR">this link</a> can receive 10 yuan in model credits plus a 10% first top-up bonus.
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 📧 **Contact**: relakkes@gmail.com
 
@@ -242,6 +270,16 @@ If this project helps you, consider buying me a coffee — every bit of support 
 </td>
 </tr>
 </table>
+
+---
+
+## Thanks
+
+Thanks to the following open-source projects and community practices for reference and inspiration:
+
+- [React](https://github.com/facebook/react): frontend engineering and component-based UI ecosystem.
+- [Tauri](https://github.com/tauri-apps/tauri): cross-platform desktop app capabilities and engineering practices.
+- [cc-switch](https://github.com/farion1231/cc-switch): reference for model provider configuration.
 
 ---
 
