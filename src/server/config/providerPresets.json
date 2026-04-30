@@ -1,0 +1,86 @@
+[
+  {
+    "id": "official",
+    "name": "Claude Official",
+    "baseUrl": "",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "",
+      "haiku": "",
+      "sonnet": "",
+      "opus": ""
+    },
+    "needsApiKey": false,
+    "websiteUrl": "https://www.anthropic.com/claude-code"
+  },
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "baseUrl": "https://api.deepseek.com/anthropic",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "deepseek-chat",
+      "haiku": "deepseek-chat",
+      "sonnet": "deepseek-chat",
+      "opus": "deepseek-chat"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://platform.deepseek.com"
+  },
+  {
+    "id": "zhipuglm",
+    "name": "Zhipu GLM",
+    "baseUrl": "https://open.bigmodel.cn/api/anthropic",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "glm-5.1",
+      "haiku": "glm-4.5-air",
+      "sonnet": "glm-5-turbo",
+      "opus": "glm-5.1"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://open.bigmodel.cn"
+  },
+  {
+    "id": "kimi",
+    "name": "Kimi",
+    "baseUrl": "https://api.moonshot.cn/anthropic",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "kimi-k2.6",
+      "haiku": "kimi-k2.6",
+      "sonnet": "kimi-k2.6",
+      "opus": "kimi-k2.6"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://platform.moonshot.cn"
+  },
+  {
+    "id": "minimax",
+    "name": "MiniMax",
+    "baseUrl": "https://api.minimaxi.com/anthropic",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "MiniMax-M2.7",
+      "haiku": "MiniMax-M2.7",
+      "sonnet": "MiniMax-M2.7",
+      "opus": "MiniMax-M2.7"
+    },
+    "needsApiKey": true,
+    "websiteUrl": "https://platform.minimaxi.com"
+  },
+  {
+    "id": "custom",
+    "name": "Custom",
+    "baseUrl": "",
+    "apiFormat": "anthropic",
+    "defaultModels": {
+      "main": "",
+      "haiku": "",
+      "sonnet": "",
+      "opus": ""
+    },
+    "needsApiKey": true,
+    "websiteUrl": ""
+  }
+]
