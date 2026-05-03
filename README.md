@@ -75,6 +75,11 @@
     <td align="center" width="33%"><img src="docs/images/desktop_ui/03_ask_question_and_permission.png" alt="权限控制"><br><b>权限控制 & AI 提问</b></td>
   </tr>
   <tr>
+    <td align="center" width="33%"><img src="docs/images/desktop_ui/04_cost.png" alt="成本管理"><br><b>成本管理</b></td>
+    <td align="center" width="33%"><img src="docs/images/desktop_ui/06_edit_code.png" alt="代码编辑"><br><b>代码编辑</b></td>
+    <td align="center" width="33%"><img src="docs/images/desktop_ui/09_doctor.png" alt="诊断"><br><b>故障诊断</b></td>
+  </tr>
+  <tr>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/05_settings.png" alt="提供商设置"><br><b>多提供商管理</b></td>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/08_scheduled_task.png" alt="定时任务"><br><b>定时任务</b></td>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/07_im.png" alt="IM 适配器"><br><b>IM 适配器（Telegram / 飞书）</b></td>
