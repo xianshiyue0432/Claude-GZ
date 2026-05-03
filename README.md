@@ -1,4 +1,4 @@
-# Claude Code Haha
+# Claude GZ
 
 <p align="center">
   <img src="docs/images/app-icon.png" alt="Claude GZ" width="240">
