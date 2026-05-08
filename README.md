@@ -236,7 +236,7 @@ http://127.0.0.1:2024
 <b>支付宝</b>
 </td>
 <td align="center" width="33%">
-<a href="https://buymeacoffee.com/relakkes" target="_blank">
+<a href="https://buymeacoffee.com/GZ" target="_blank">
 <img src="docs/images/donate/bmc_button.png" width="250" alt="Buy Me a Coffee">
 </a><br>
 <b>Buy Me a Coffee</b>
