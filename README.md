@@ -228,16 +228,16 @@ http://127.0.0.1:2024
 <table>
 <tr>
 <td align="center" width="33%">
-<img src="images/donate/wechat_pay.jpeg" width="250" alt="微信赞赏"><br>
+<img src="docs/images/donate/wechat_pay.jpeg" width="250" alt="微信赞赏"><br>
 <b>微信赞赏</b>
 </td>
 <td align="center" width="33%">
-<img src="images/donate/zfb_pay.png" width="250" alt="支付宝"><br>
+<img src="docs/images/donate/zfb_pay.png" width="250" alt="支付宝"><br>
 <b>支付宝</b>
 </td>
 <td align="center" width="33%">
 <a href="https://buymeacoffee.com/GZ" target="_blank">
-<img src="images/donate/bmc_button.png" width="250" alt="Buy Me a Coffee">
+<img src="docs/images/donate/bmc_button.png" width="250" alt="Buy Me a Coffee">
 </a><br>
 <b>Buy Me a Coffee</b>
 </td>
