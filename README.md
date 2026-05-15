@@ -71,7 +71,7 @@
 <table>
   <tr>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/01_full_ui.png" alt="主界面"><br><b>主界面</b></td>
-    <td align="center" width="33%"><img src="docs/images/desktop_ui/02_edit_code.png" alt="代码编辑"><br><b>代码编辑 & Diff 视图</b></td>
+    <td align="center" width="33%"><img src="docs/images/desktop_ui/06_edit_code.png" alt="代码编辑"><br><b>代码编辑 & Diff 视图</b></td>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/03_ask_question_and_permission.png" alt="权限控制"><br><b>权限控制 & AI 提问</b></td>
   </tr>
   <tr>
@@ -81,7 +81,7 @@
   </tr>
 <tr>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/05_settings.png" alt="提供商设置"><br><b>多提供商管理</b></td>
-    <td align="center" width="33%"><img src="docs/images/desktop_ui/06_ComputerUse.png" alt="电脑控制"><br><b>电脑控制</b></td>
+    <td align="center" width="33%"><img src="docs/images/desktop_ui/06_settings_computer_use.png" alt="电脑控制"><br><b>电脑控制</b></td>
     <td align="center" width="33%"><img src="docs/images/desktop_ui/09_doctor.png" alt="诊断日志"><br><b>诊断日志</b></td>
   </tr>
 
